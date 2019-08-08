@@ -6,7 +6,6 @@ import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow } from './main/mainWindow';
 import './main/dialogs/screenshare';
-import './main/dialogs/update';
 import i18n from './i18n';
 export { default as certificate } from './main/certificateStore';
 

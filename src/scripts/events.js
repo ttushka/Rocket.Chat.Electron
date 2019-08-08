@@ -1,4 +1,4 @@
-import { remote } from 'electron';
+import { remote, ipcRenderer } from 'electron';
 import servers from './servers';
 import sidebar from './sidebar';
 import webview from './webview';
@@ -7,6 +7,7 @@ import dock from './dock';
 import menus from './menus';
 import tray from './tray';
 import about from './dialogs/about';
+import update from './dialogs/update';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -299,4 +300,6 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
+
+	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

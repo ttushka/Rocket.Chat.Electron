@@ -1,17 +1,18 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import { getMainWindow } from '../mainWindow';
+import { remote } from 'electron';
 import i18n from '../../i18n';
 
 
+const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+
 let window;
 
-async function open({ currentVersion = app.getVersion(), newVersion } = {}) {
+const open = ({ newVersion } = {}) => {
 	if (window) {
 		return;
 	}
 
-	const mainWindow = await getMainWindow();
-	window = new BrowserWindow({
+	const mainWindow = remote.getCurrentWindow();
+	window = new remote.BrowserWindow({
 		width: 600,
 		height: 330,
 		useContentSize: true,
@@ -43,16 +44,17 @@ async function open({ currentVersion = app.getVersion(), newVersion } = {}) {
 		window = null;
 	});
 
-	window.params = { currentVersion, newVersion };
+	window.loadURL(`file://${ getPathFromApp('public/dialogs/update.html') }?newVersion=${ newVersion }`);
+};
 
-	window.loadFile(`${ app.getAppPath() }/app/public/dialogs/update.html`);
-}
-
-function close() {
-	if (window) {
-		window.destroy();
+const close = () => {
+	if (!window) {
+		return;
 	}
-}
+	window.destroy();
+};
 
-ipcMain.on('open-update-dialog', (e, ...args) => open(...args));
-ipcMain.on('close-update-dialog', (e, ...args) => close(...args));
+export default {
+	open,
+	close,
+};

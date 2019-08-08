@@ -105,7 +105,7 @@ const handleCheckingForUpdate = () => {
 	sendToMainWindow('update-checking');
 };
 
-const handleUpdateAvailable = ({ version }) => {
+const handleUpdateAvailable = async ({ version }) => {
 	if (checkForUpdatesEvent) {
 		checkForUpdatesEvent.sender.send('update-result', true);
 		checkForUpdatesEvent = null;
@@ -113,7 +113,8 @@ const handleUpdateAvailable = ({ version }) => {
 		return;
 	}
 
-	ipcMain.emit('open-update-dialog', undefined, { newVersion: version });
+	const mainWindow = await getMainWindow();
+	mainWindow.send('open-update-dialog', { newVersion: version });
 };
 
 const handleUpdateNotAvailable = () => {

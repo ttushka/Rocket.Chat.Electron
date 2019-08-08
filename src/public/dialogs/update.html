@@ -6,8 +6,9 @@
 	<link rel="stylesheet" href="../../stylesheets/main.css" />
 	<script>
 		window.addEventListener('load', () => {
-			const { remote: { dialog, getCurrentWindow }, ipcRenderer } = require('electron');
-			const { params: { currentVersion, newVersion} } = getCurrentWindow();
+			const { remote, remote: { dialog, getCurrentWindow }, ipcRenderer } = require('electron');
+			const { newVersion } = require('querystring').parse(location.search.slice(1));
+			const currentVersion = remote.app.getVersion();
 			const i18n = require('../../i18n');
 
 			document.title = i18n.__('dialog.update.title');
@@ -31,15 +32,15 @@
 					buttons: [i18n.__('dialog.updateSkip.ok')],
 					defaultId: 0,
 				}, () => {
-					ipcRenderer.send('close-update-dialog');
 					ipcRenderer.send('skip-update-version', newVersion);
+					window.close();
 				});
 			}, false);
 
 			document.querySelector('.update-remind-action').addEventListener('click', (e) => {
 				e.preventDefault();
-				ipcRenderer.send('close-update-dialog');
 				ipcRenderer.send('remind-update-later');
+				window.close();
 			}, false);
 
 			document.querySelector('.update-install-action').addEventListener('click', (e) => {
@@ -51,8 +52,8 @@
 					buttons: [i18n.__('dialog.updateDownloading.ok')],
 					defaultId: 0,
 				}, () => {
-						ipcRenderer.send('close-update-dialog');
 						ipcRenderer.send('download-update');
+						window.close();
 				});
 			}, false);
 
