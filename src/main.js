@@ -12,7 +12,6 @@ import i18n from './i18n';
 export { default as dock } from './main/dock';
 export { default as menus } from './main/menus';
 export { default as tray } from './main/tray';
-export { default as notifications } from './main/notifications';
 export { default as certificate } from './main/certificateStore';
 
 async function prepareApp() {

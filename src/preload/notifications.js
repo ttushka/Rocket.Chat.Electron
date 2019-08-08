@@ -1,7 +1,7 @@
 import { ipcRenderer, remote } from 'electron';
 import { EventEmitter } from 'events';
 import mem from 'mem';
-const { notifications } = remote.require('./main');
+const { nativeImage, Notification: ElectronNotification } = remote;
 
 
 class Notification extends EventEmitter {
@@ -43,7 +43,11 @@ class Notification extends EventEmitter {
 			icon = await this.createIcon(icon);
 		}
 
-		const notification = notifications.create({ icon, hasReply: canReply, ...options });
+		const notification = new ElectronNotification({
+			icon: icon && nativeImage.createFromDataURL(icon),
+			hasReply: canReply,
+			...options,
+		});
 
 		notification.on('show', this.handleShow.bind(this));
 		notification.on('close', this.handleClose.bind(this));
