@@ -1,4 +1,4 @@
-import { remote, ipcRenderer } from 'electron';
+import { remote } from 'electron';
 import servers from './servers';
 import sidebar from './sidebar';
 import webview from './webview';
@@ -6,6 +6,7 @@ import setTouchBar from './touchBar';
 import dock from './dock';
 import menus from './menus';
 import tray from './tray';
+import about from './dialogs/about';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -81,7 +82,7 @@ export default () => {
 	window.addEventListener('focus', () => webview.focusActive());
 
 	menus.on('quit', () => app.quit());
-	menus.on('about', () => ipcRenderer.send('open-about-dialog'));
+	menus.on('about', () => about.open());
 	menus.on('open-url', (url) => shell.openExternal(url));
 
 	menus.on('add-new-server', () => {

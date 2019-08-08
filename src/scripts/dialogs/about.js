@@ -1,17 +1,18 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import { getMainWindow } from '../mainWindow';
+import { remote } from 'electron';
 import i18n from '../../i18n';
 
 
+const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+
 let window;
 
-async function open() {
+const open = () => {
 	if (window) {
 		return;
 	}
 
-	const mainWindow = await getMainWindow();
-	window = new BrowserWindow({
+	const mainWindow = remote.getCurrentWindow();
+	window = new remote.BrowserWindow({
 		width: 400,
 		height: 300,
 		useContentSize: true,
@@ -22,7 +23,7 @@ async function open() {
 		fullscreen: false,
 		fullscreenable: false,
 		skipTaskbar: true,
-		title: i18n.__('dialog.about.title', { appName: app.getName() }),
+		title: i18n.__('dialog.about.title', { appName: remote.app.getName() }),
 		show: false,
 		parent: mainWindow,
 		modal: process.platform !== 'darwin',
@@ -43,16 +44,17 @@ async function open() {
 		window = null;
 	});
 
-	window.params = { appName: app.getName(), appVersion: app.getVersion() };
+	window.loadFile(getPathFromApp('public/dialogs/about.html'));
+};
 
-	window.loadFile(`${ app.getAppPath() }/app/public/dialogs/about.html`);
-}
-
-function close() {
-	if (window) {
-		window.destroy();
+const close = () => {
+	if (!window) {
+		return;
 	}
-}
+	window.destroy();
+};
 
-ipcMain.on('open-about-dialog', (e, ...args) => open(...args));
-ipcMain.on('close-about-dialog', (e, ...args) => close(...args));
+export default {
+	open,
+	close,
+};

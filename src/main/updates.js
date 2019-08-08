@@ -113,7 +113,6 @@ const handleUpdateAvailable = ({ version }) => {
 		return;
 	}
 
-	ipcMain.emit('close-about-dialog');
 	ipcMain.emit('open-update-dialog', undefined, { newVersion: version });
 };
 

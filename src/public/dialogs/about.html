@@ -6,8 +6,9 @@
 	<link rel="stylesheet" href="../../stylesheets/main.css" />
 	<script>
 		window.addEventListener('load', () => {
-			const { remote: { getCurrentWindow }, ipcRenderer } = require('electron');
-			const { params: { appName, appVersion} } = getCurrentWindow();
+			const { remote, ipcRenderer } = require('electron');
+			const appName = remote.app.getName();
+			const appVersion = remote.app.getVersion();
 			const i18n = require('../../i18n');
 			const { copyright } = require('../../../package.json');
 
@@ -54,6 +55,7 @@
 				ipcRenderer.on('update-result', (e, updateAvailable) => {
 					if (updateAvailable) {
 						resetUpdatesSection();
+						window.close();
 						return;
 					}
 
