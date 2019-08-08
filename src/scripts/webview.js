@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron';
 import { EventEmitter } from 'events';
 import servers from './servers';
+import screenshare from './dialogs/screenshare';
 
 
 class WebView extends EventEmitter {
@@ -57,7 +58,7 @@ class WebView extends EventEmitter {
 
 			switch (event.channel) {
 				case 'get-sourceId':
-					ipcRenderer.send('open-screenshare-dialog');
+					screenshare.open();
 					break;
 				case 'reload-server': {
 					const webviewObj = this.getByUrl(host.url);

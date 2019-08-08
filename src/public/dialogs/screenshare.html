@@ -29,7 +29,8 @@
 					sourceView.querySelector('.screenshare-source-name').textContent = name;
 
 					sourceView.querySelector('.screenshare-source').addEventListener('click', (e) => {
-						ipcRenderer.send('select-screenshare-source', id);
+						ipcRenderer.emit('select-screenshare-source', null, id);
+
 						window.close();
 					}, false);
 

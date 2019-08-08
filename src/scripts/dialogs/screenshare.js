@@ -1,17 +1,18 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import { getMainWindow } from '../mainWindow';
+import { remote, ipcRenderer } from 'electron';
 import i18n from '../../i18n';
 
 
+const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+
 let window;
 
-async function open() {
+const open = () => {
 	if (window) {
 		return;
 	}
 
-	const mainWindow = await getMainWindow();
-	window = new BrowserWindow({
+	const mainWindow = remote.getCurrentWindow();
+	window = new remote.BrowserWindow({
 		width: 776,
 		height: 600,
 		useContentSize: true,
@@ -46,24 +47,29 @@ async function open() {
 		window = null;
 	});
 
-	window.loadFile(`${ app.getAppPath() }/app/public/dialogs/screenshare.html`);
-}
+	window.loadFile(getPathFromApp('public/dialogs/screenshare.html'));
+};
 
-function close() {
-	if (window) {
-		window.destroy();
+const close = () => {
+	if (!window) {
+		return;
 	}
-}
+	window.destroy();
+};
 
-async function selectSource(id) {
-	const mainWindow = await getMainWindow();
+const selectSource = (id) => {
+	const mainWindow = remote.getCurrentWindow();
 	mainWindow.webContents.send('screenshare-result', id);
 	if (window) {
 		window.resultSent = true;
 		window.destroy();
 	}
-}
+};
 
-ipcMain.on('open-screenshare-dialog', (e, ...args) => open(...args));
-ipcMain.on('close-screenshare-dialog', (e, ...args) => close(...args));
-ipcMain.on('select-screenshare-source', (e, ...args) => selectSource(...args));
+ipcRenderer.on('select-screenshare-source', (e, ...args) => selectSource(...args));
+
+export default {
+	open,
+	close,
+	selectSource,
+};

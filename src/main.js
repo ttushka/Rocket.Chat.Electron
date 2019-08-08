@@ -5,7 +5,6 @@ import './main/basicAuth';
 import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow } from './main/mainWindow';
-import './main/dialogs/screenshare';
 import i18n from './i18n';
 export { default as certificate } from './main/certificateStore';
 
