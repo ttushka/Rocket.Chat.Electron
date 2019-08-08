@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { WindowStateHandler } from './state';
+import i18n from '../../i18n';
 
 
 let mainWindow = null;
@@ -65,7 +66,30 @@ async function attachWindowStateHandling(mainWindow) {
 	mainWindow.on('set-state', setState);
 }
 
+const unsetDefaultApplicationMenu = () => {
+	if (process.platform !== 'darwin') {
+		Menu.setApplicationMenu(null);
+		return;
+	}
+
+	const emptyMenuTemplate = [{
+		label: app.getName(),
+		submenu: [
+			{
+				label: i18n.__('menus.quit', { appName: app.getName() }),
+				accelerator: 'CommandOrControl+Q',
+				click() {
+					app.quit();
+				},
+			},
+		],
+	}];
+	Menu.setApplicationMenu(Menu.buildFromTemplate(emptyMenuTemplate));
+};
+
 async function createMainWindow() {
+	unsetDefaultApplicationMenu();
+
 	mainWindow = new BrowserWindow({
 		width: 1000,
 		height: 600,

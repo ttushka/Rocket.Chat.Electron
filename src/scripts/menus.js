@@ -1,6 +1,5 @@
-import { app, Menu, webContents } from 'electron';
+import { remote } from 'electron';
 import { EventEmitter } from 'events';
-import { getMainWindow } from './mainWindow';
 import i18n from '../i18n';
 
 
@@ -72,12 +71,12 @@ const createTemplate = ({
 			{
 				label: i18n.__('menus.undo'),
 				accelerator: 'CommandOrControl+Z',
-				click: () => webContents.getFocusedWebContents().undo(),
+				click: () => remote.webContents.getFocusedWebContents().undo(),
 			},
 			{
 				label: i18n.__('menus.redo'),
 				accelerator: process.platform === 'win32' ? 'Control+Y' : 'CommandOrControl+Shift+Z',
-				click: () => webContents.getFocusedWebContents().redo(),
+				click: () => remote.webContents.getFocusedWebContents().redo(),
 			},
 			{
 				type: 'separator',
@@ -300,17 +299,17 @@ class Menus extends EventEmitter {
 	}
 
 	getItem(id) {
-		return Menu.getApplicationMenu().getMenuItemById(id);
+		return remote.Menu.getApplicationMenu().getMenuItemById(id);
 	}
 
-	async update() {
-		const template = createTemplate({ appName: app.getName(), ...this.state }, this);
-		const menu = Menu.buildFromTemplate(template);
-		Menu.setApplicationMenu(menu);
+	update() {
+		const template = createTemplate({ appName: remote.app.getName(), ...this.state }, this);
+		const menu = remote.Menu.buildFromTemplate(template);
+		remote.Menu.setApplicationMenu(menu);
 
 		if (process.platform !== 'darwin') {
 			const { showMenuBar } = this.state;
-			const mainWindow = await getMainWindow();
+			const mainWindow = remote.getCurrentWindow();
 			mainWindow.setAutoHideMenuBar(!showMenuBar);
 			mainWindow.setMenuBarVisibility(!!showMenuBar);
 		}
@@ -318,28 +317,5 @@ class Menus extends EventEmitter {
 		this.emit('update');
 	}
 }
-
-const unsetDefaultApplicationMenu = () => {
-	if (process.platform !== 'darwin') {
-		Menu.setApplicationMenu(null);
-		return;
-	}
-
-	const emptyMenuTemplate = [{
-		label: app.getName(),
-		submenu: [
-			{
-				label: i18n.__('menus.quit', { appName: app.getName() }),
-				accelerator: 'CommandOrControl+Q',
-				click() {
-					app.quit();
-				},
-			},
-		],
-	}];
-	Menu.setApplicationMenu(Menu.buildFromTemplate(emptyMenuTemplate));
-};
-
-app.once('start', unsetDefaultApplicationMenu);
 
 export default new Menus();

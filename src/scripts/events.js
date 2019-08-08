@@ -4,11 +4,12 @@ import sidebar from './sidebar';
 import webview from './webview';
 import setTouchBar from './touchBar';
 import dock from './dock';
+import menus from './menus';
 import tray from './tray';
 
 
 const { app, getCurrentWindow, shell } = remote;
-const { certificate, menus } = remote.require('./main');
+const { certificate } = remote.require('./main');
 
 const updatePreferences = () => {
 	const mainWindow = getCurrentWindow();
