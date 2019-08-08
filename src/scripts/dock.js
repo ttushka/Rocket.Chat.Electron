@@ -1,7 +1,6 @@
-import { app } from 'electron';
+import { remote } from 'electron';
 import { EventEmitter } from 'events';
-import { getMainWindow } from './mainWindow';
-import { getTrayIconImage, getAppIconImage } from './icon';
+import { getTrayIconImage, getAppIconImage } from '../main/icon';
 
 
 const getBadgeText = ({ badge }) => {
@@ -27,15 +26,15 @@ const destroy = () => {
 	instance.removeAllListeners();
 };
 
-const update = async (previousState) => {
-	const mainWindow = await getMainWindow();
+const update = (previousState) => {
+	const mainWindow = remote.getCurrentWindow();
 
 	if (process.platform === 'darwin') {
-		app.dock.setBadge(getBadgeText(state));
+		remote.app.dock.setBadge(getBadgeText(state));
 		const count = Number.isInteger(state.badge) ? state.badge : 0;
 		const previousCount = Number.isInteger(previousState.badge) ? state.badge : 0;
 		if (count > 0 && previousCount === 0) {
-			app.dock.bounce();
+			remote.app.dock.bounce();
 		}
 	}
 
