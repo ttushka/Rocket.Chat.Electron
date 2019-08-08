@@ -2,6 +2,8 @@ import { remote } from 'electron';
 const { nativeImage, systemPreferences } = remote;
 
 
+const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+
 function getTrayIconSet({ platform, dark }) {
 	if (platform === 'darwin') {
 		return `darwin${ dark ? '-dark' : '' }`;
@@ -59,16 +61,16 @@ export function getAppIconImage() {
 }
 
 export function getTrayIconImage({ badge, platform, dark } = {}) {
-	return nativeImage.createFromPath(`${ __dirname }/${ getTrayIconPath({ badge, platform, dark }) }`);
+	return nativeImage.createFromPath(getPathFromApp(getTrayIconPath({ badge, platform, dark })));
 }
 
 export function getIconImage({ badge }) {
-	const iconsetsPath = `${ __dirname }/public/images/tray`;
+	const iconsetsPath = 'public/images/tray';
 	const { platform } = process;
 	const dark = systemPreferences.isDarkMode();
 	const params = { badge, platform, dark };
 	const iconset = getTrayIconSet(params);
 	const name = getTrayIconName(params);
 	const extension = getTrayIconExtension(params);
-	return nativeImage.createFromPath(`${ iconsetsPath }/${ iconset }/${ name }.${ extension }`);
+	return nativeImage.createFromPath(getPathFromApp(`${ iconsetsPath }/${ iconset }/${ name }.${ extension }`));
 }

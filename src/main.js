@@ -10,7 +10,6 @@ import './main/dialogs/screenshare';
 import './main/dialogs/update';
 import i18n from './i18n';
 export { default as menus } from './main/menus';
-export { default as tray } from './main/tray';
 export { default as certificate } from './main/certificateStore';
 
 async function prepareApp() {

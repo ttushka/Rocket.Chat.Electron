@@ -1,4 +1,4 @@
-import { app, Menu, systemPreferences, Tray as TrayIcon } from 'electron';
+import { remote } from 'electron';
 import { EventEmitter } from 'events';
 import i18n from '../i18n';
 import { getTrayIconImage } from './icon';
@@ -7,7 +7,7 @@ import { getTrayIconImage } from './icon';
 const getIconTitle = ({ badge }) => (Number.isInteger(badge) ? String(badge) : '');
 
 const getIconTooltip = ({ badge }) => {
-	const appName = app.getName();
+	const appName = remote.app.getName();
 
 	if (badge === '•') {
 		return i18n.__('tray.tooltip.unreadMessage', { appName });
@@ -51,10 +51,10 @@ const createIcon = () => {
 		return;
 	}
 
-	trayIcon = new TrayIcon(image);
+	trayIcon = new remote.Tray(image);
 
 	if (process.platform === 'darwin') {
-		darwinThemeSubscriberId = systemPreferences.subscribeNotification('AppleInterfaceThemeChangedNotification', () => {
+		darwinThemeSubscriberId = remote.systemPreferences.subscribeNotification('AppleInterfaceThemeChangedNotification', () => {
 			trayIcon.setImage(getTrayIconImage({ badge: state.badge }));
 		});
 	}
@@ -71,7 +71,7 @@ const destroyIcon = () => {
 	}
 
 	if (process.platform === 'darwin' && darwinThemeSubscriberId) {
-		systemPreferences.unsubscribeNotification(darwinThemeSubscriberId);
+		remote.systemPreferences.unsubscribeNotification(darwinThemeSubscriberId);
 		darwinThemeSubscriberId = null;
 	}
 
@@ -102,7 +102,7 @@ const update = () => {
 	}
 
 	const template = createContextMenuTemplate(state, instance);
-	const menu = Menu.buildFromTemplate(template);
+	const menu = remote.Menu.buildFromTemplate(template);
 	trayIcon.setContextMenu(menu);
 	instance.emit('update');
 };

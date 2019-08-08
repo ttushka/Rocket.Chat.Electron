@@ -1,6 +1,6 @@
 import { remote } from 'electron';
 import { EventEmitter } from 'events';
-import { getTrayIconImage, getAppIconImage } from '../main/icon';
+import { getTrayIconImage, getAppIconImage } from './icon';
 
 
 const getBadgeText = ({ badge }) => {
