@@ -3,7 +3,6 @@ import { setupErrorHandling } from './errorHandling';
 import appData from './main/appData';
 import './main/basicAuth';
 import { processDeepLink } from './main/deepLinks';
-import './main/systemIdleTime';
 import './main/updates';
 import { getMainWindow } from './main/mainWindow';
 import './main/dialogs/about';

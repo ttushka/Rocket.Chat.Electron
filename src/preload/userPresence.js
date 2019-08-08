@@ -1,11 +1,11 @@
-import { ipcRenderer } from 'electron';
+import { getIdleTime } from '@paulcbetts/system-idle-time';
 import { getMeteor, getTracker, getGetUserPreference, getUserPresence } from './rocketChat';
 
 const pollUserPresence = (UserPresence, maximumIdleTime) => () => {
 	let isUserPresent = true;
 
 	try {
-		const idleTime = ipcRenderer.sendSync('request-system-idle-time');
+		const idleTime = getIdleTime();
 		isUserPresent = idleTime < maximumIdleTime;
 
 		if (isUserPresent) {
