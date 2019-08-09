@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { setupErrorHandling } from './errorHandling';
-import appData from './main/appData';
+import { setupUserData } from './main/userData';
 import './main/basicAuth';
 import { processDeepLink } from './main/deepLinks';
 import './main/updates';
@@ -8,13 +8,14 @@ import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './
 import i18n from './i18n';
 export { default as certificate } from './main/certificateStore';
 
-async function prepareApp() {
+
+const prepareApp = () => {
 	setupErrorHandling('main');
 
 	app.setAsDefaultProtocolClient('rocketchat');
 	app.setAppUserModelId('chat.rocket');
 
-	await appData.initialize();
+	setupUserData();
 
 	const canStart = process.mas || app.requestSingleInstanceLock();
 
@@ -46,10 +47,10 @@ async function prepareApp() {
 	app.on('activate', async () => {
 		(await getMainWindow()).show();
 	});
-}
+};
 
 (async () => {
-	await prepareApp();
+	prepareApp();
 	await app.whenReady();
 	await i18n.initialize();
 	unsetDefaultApplicationMenu();
