@@ -1,7 +1,6 @@
 import { app, ipcMain } from 'electron';
 import { setupErrorHandling } from './errorHandling';
 import { setupUserData } from './main/userData';
-import './main/basicAuth';
 import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
@@ -46,6 +45,10 @@ const prepareApp = () => {
 
 	app.on('activate', async () => {
 		(await getMainWindow()).show();
+	});
+
+	app.on('login', (event) => {
+		event.preventDefault();
 	});
 };
 

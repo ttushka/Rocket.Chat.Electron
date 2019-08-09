@@ -105,7 +105,6 @@ class Servers extends EventEmitter {
 		}
 
 		this._hosts = hosts;
-		ipcRenderer.send('update-servers', this._hosts);
 		this.emit('loaded');
 	}
 
@@ -179,8 +178,6 @@ class Servers extends EventEmitter {
 		};
 		this.hosts = hosts;
 
-		ipcRenderer.send('update-servers', this._hosts);
-
 		this.emit('host-added', hostUrl);
 
 		return hostUrl;
@@ -191,8 +188,6 @@ class Servers extends EventEmitter {
 		if (hosts[hostUrl]) {
 			delete hosts[hostUrl];
 			this.hosts = hosts;
-
-			ipcRenderer.send('update-servers', this._hosts);
 
 			if (this.active === hostUrl) {
 				this.clearActive();

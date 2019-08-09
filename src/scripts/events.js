@@ -9,6 +9,7 @@ import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
 import { setupMainWindowStateHandling } from './mainWindow';
+import { setupBasicAuthentication } from './basicAuth';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -301,6 +302,7 @@ export default () => {
 	updateServers();
 	updateWindowState();
 	setupMainWindowStateHandling();
+	setupBasicAuthentication();
 
 	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };
