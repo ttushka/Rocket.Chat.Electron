@@ -1,15 +1,26 @@
 .about-page {
-	display: flex;
+	display: none;
 	flex-direction: column;
 
-	min-height: 100vh;
 	padding: 0.25rem 0.75rem;
+	width: 400px;
+	height: 300px;
+	position: fixed;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1000;
 
 	cursor: default;
 	user-select: none;
 
 	color: @primary-font-color;
 	background-color: @secondary-background-color;
+
+	&[open] {
+		display: flex;
+	}
 
 	.hidden {
 		display: none !important;

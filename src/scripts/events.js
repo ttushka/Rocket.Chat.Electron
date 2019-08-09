@@ -76,6 +76,7 @@ const destroyAll = () => {
 		const mainWindow = getCurrentWindow();
 		mainWindow.removeListener('hide', updateWindowState);
 		mainWindow.removeListener('show', updateWindowState);
+		mainWindow.removeAllListeners();
 	} catch (error) {
 		remote.getGlobal('console').error(error);
 	}

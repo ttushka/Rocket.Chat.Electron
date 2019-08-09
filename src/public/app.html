@@ -56,6 +56,36 @@
 		</div>
 	</section>
 
+	<dialog class="about-page">
+		<section class="app-info">
+			<div class="app-logo">
+				<img src="./images/logo.svg">
+			</div>
+			<div class="app-version">
+				Version <span class="version">%s</span>
+			</div>
+		</section>
+
+		<section class="updates hidden">
+			<button class="check-for-updates button primary">
+				Check for Updates
+			</button>
+
+			<div class="checking-for-updates hidden">
+				<span class="dot"></span>
+				<span class="dot"></span>
+				<span class="dot"></span>
+				<span class="message"></span>
+			</div>
+
+			<label class="check-for-updates-on-start__label">
+				<input class="check-for-updates-on-start" type="checkbox" checked /> <span>Check for Updates on Start</span>
+			</label>
+		</section>
+
+		<div class="copyright"></div>
+	</dialog>
+
 	<div class="drag-region"></div>
 </body>
 </html>
