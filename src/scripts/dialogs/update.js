@@ -1,57 +1,94 @@
-import { remote } from 'electron';
+import { remote, ipcRenderer } from 'electron';
 import i18n from '../../i18n';
 
 
-const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+let dialog;
 
-let window;
+const mount = () => {
+	dialog = document.querySelector('.update-page');
+
+	dialog.querySelector('.update-title').innerHTML = i18n.__('dialog.update.announcement');
+	dialog.querySelector('.update-message').innerHTML = i18n.__('dialog.update.message');
+	dialog.querySelector('.current-version .app-version-label').innerHTML = i18n.__('dialog.update.currentVersion');
+	dialog.querySelector('.new-version .app-version-label').innerHTML = i18n.__('dialog.update.newVersion');
+	dialog.querySelector('.update-skip-action').innerHTML = i18n.__('dialog.update.skip');
+	dialog.querySelector('.update-remind-action').innerHTML = i18n.__('dialog.update.remindLater');
+	dialog.querySelector('.update-install-action').innerHTML = i18n.__('dialog.update.install');
+
+	dialog.addEventListener('click', (event) => {
+		const { clientLeft, clientTop, clientWidth, clientHeight } = dialog;
+		const { left, top } = dialog.getBoundingClientRect();
+		const { clientX, clientY } = event;
+
+		const minX = left + clientLeft;
+		const minY = top + clientTop;
+		if ((clientX < minX || clientX >= minX + clientWidth) || (clientY < minY || clientY >= minY + clientHeight)) {
+			dialog.close();
+		}
+	}, false);
+
+	dialog.querySelector('.update-skip-action').addEventListener('click', (event) => {
+		event.preventDefault();
+		dialog.showMessageBox(remote.getCurrentWindow(), {
+			type: 'warning',
+			title: i18n.__('dialog.updateSkip.title'),
+			message: i18n.__('dialog.updateSkip.message'),
+			buttons: [i18n.__('dialog.updateSkip.ok')],
+			defaultId: 0,
+		}, () => {
+			ipcRenderer.send('skip-update-version', dialog.querySelector('.new-version .app-version-value').innerText);
+			dialog.close();
+		});
+	}, false);
+
+	dialog.querySelector('.update-remind-action').addEventListener('click', (event) => {
+		event.preventDefault();
+		ipcRenderer.send('remind-update-later');
+		dialog.close();
+	}, false);
+
+	dialog.querySelector('.update-install-action').addEventListener('click', (event) => {
+		event.preventDefault();
+		dialog.showMessageBox(remote.getCurrentWindow(), {
+			type: 'info',
+			title: i18n.__('dialog.updateDownloading.title'),
+			message: i18n.__('dialog.updateDownloading.message'),
+			buttons: [i18n.__('dialog.updateDownloading.ok')],
+			defaultId: 0,
+		}, () => {
+			ipcRenderer.send('download-update');
+			dialog.close();
+		});
+	}, false);
+};
 
 const open = ({ newVersion } = {}) => {
-	if (window) {
+	if (!dialog) {
+		mount();
+	}
+
+	if (dialog.open) {
 		return;
 	}
 
-	const mainWindow = remote.getCurrentWindow();
-	window = new remote.BrowserWindow({
-		width: 600,
-		height: 330,
-		useContentSize: true,
-		center: true,
-		resizable: false,
-		minimizable: false,
-		maximizable: false,
-		fullscreen: false,
-		fullscreenable: false,
-		skipTaskbar: true,
-		title: i18n.__('dialog.update.title'),
-		show: false,
-		parent: mainWindow,
-		modal: process.platform !== 'darwin',
-		backgroundColor: '#F4F4F4',
-		type: process.platform === 'darwin' ? 'desktop' : 'toolbar',
-		webPreferences: {
-			devTools: false,
-			nodeIntegration: true,
-		},
-	});
-	window.setMenuBarVisibility(false);
+	dialog.querySelector('.current-version .app-version-value').innerText = remote.app.getVersion();
+	dialog.querySelector('.new-version .app-version-value').innerText = newVersion;
 
-	window.once('ready-to-show', () => {
-		window.show();
-	});
+	dialog.querySelector('.update-install-action').focus();
 
-	window.once('closed', () => {
-		window = null;
-	});
-
-	window.loadURL(`file://${ getPathFromApp('public/dialogs/update.html') }?newVersion=${ newVersion }`);
+	dialog.showModal();
 };
 
 const close = () => {
-	if (!window) {
+	if (!dialog) {
+		mount();
+	}
+
+	if (!dialog.open) {
 		return;
 	}
-	window.destroy();
+
+	dialog.close();
 };
 
 export default {
