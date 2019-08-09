@@ -8,6 +8,7 @@ import menus from './menus';
 import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
+import { setupMainWindowStateHandling } from './mainWindow';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -300,6 +301,7 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
+	setupMainWindowStateHandling();
 
 	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

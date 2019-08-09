@@ -4,7 +4,7 @@ import appData from './main/appData';
 import './main/basicAuth';
 import { processDeepLink } from './main/deepLinks';
 import './main/updates';
-import { getMainWindow } from './main/mainWindow';
+import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
 import i18n from './i18n';
 export { default as certificate } from './main/certificateStore';
 
@@ -42,13 +42,18 @@ async function prepareApp() {
 	app.on('second-instance', (event, argv) => {
 		argv.slice(2).forEach(processDeepLink);
 	});
+
+	app.on('activate', async () => {
+		(await getMainWindow()).show();
+	});
 }
 
 (async () => {
 	await prepareApp();
 	await app.whenReady();
 	await i18n.initialize();
+	unsetDefaultApplicationMenu();
+	createMainWindow();
 	app.emit('start');
-	await getMainWindow();
 	process.argv.slice(2).forEach(processDeepLink);
 })();

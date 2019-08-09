@@ -1,8 +1,33 @@
-import { app, screen } from 'electron';
+import { remote, ipcRenderer } from 'electron';
 import jetpack from 'fs-jetpack';
 
+const focus = () => {
+	const mainWindow = remote.getCurrentWindow();
 
-export class WindowStateHandler {
+	if (process.platform === 'win32') {
+		if (mainWindow.isVisible()) {
+			mainWindow.focus();
+		} else if (mainWindow.isMinimized()) {
+			mainWindow.restore();
+		} else {
+			mainWindow.show();
+		}
+
+		return;
+	}
+
+	if (mainWindow.isMinimized()) {
+		mainWindow.restore();
+		return;
+	}
+
+	mainWindow.show();
+	mainWindow.focus();
+};
+
+ipcRenderer.on('focus', focus);
+
+class WindowStateHandler {
 	constructor(window, name) {
 		this.window = window;
 		this.name = name;
@@ -16,7 +41,7 @@ export class WindowStateHandler {
 
 	async load() {
 		try {
-			const userDataDir = jetpack.cwd(app.getPath('userData'));
+			const userDataDir = jetpack.cwd(remote.app.getPath('userData'));
 			this.state = {
 				...this.state,
 				...(await userDataDir.readAsync(`window-state-${ this.name }.json`, 'json') || {}),
@@ -34,7 +59,7 @@ export class WindowStateHandler {
 		}
 
 		try {
-			const userDataDir = jetpack.cwd(app.getPath('userData'));
+			const userDataDir = jetpack.cwd(remote.app.getPath('userData'));
 			await userDataDir.writeAsync(`window-state-${ this.name }.json`, this.state, {
 				atomic: true,
 			});
@@ -65,7 +90,7 @@ export class WindowStateHandler {
 		const { defaultWidth, defaultHeight, state, window } = this;
 
 		if (!this.isInsideSomeScreen()) {
-			const { bounds } = screen.getPrimaryDisplay();
+			const { bounds } = remote.screen.getPrimaryDisplay();
 			state.x = (bounds.width - defaultWidth) / 2;
 			state.y = (bounds.height - defaultHeight) / 2;
 			state.width = defaultWidth;
@@ -98,7 +123,7 @@ export class WindowStateHandler {
 	isInsideSomeScreen() {
 		const { state } = this;
 
-		return screen.getAllDisplays()
+		return remote.screen.getAllDisplays()
 			.some(({ bounds }) => (
 				state.x >= bounds.x &&
 				state.y >= bounds.y &&
@@ -114,6 +139,72 @@ export class WindowStateHandler {
 			clearTimeout(this.saveTimeout);
 		}
 
-		this.saveTimeout = setTimeout(() => this.save(), 5000);
+		this.saveTimeout = setTimeout(() => this.save(), 1000);
 	}
 }
+
+let state = {
+	hideOnClose: false,
+};
+
+const setState = (partialState) => {
+	state = {
+		...state,
+		...partialState,
+	};
+};
+
+const attachWindowStateHandling = async (mainWindow) => {
+	const windowStateHandler = new WindowStateHandler(mainWindow, 'main');
+	await windowStateHandler.load();
+	windowStateHandler.apply();
+
+	const exitFullscreen = () => new Promise((resolve) => {
+		if (mainWindow.isFullScreen()) {
+			mainWindow.once('leave-full-screen', resolve);
+			mainWindow.setFullScreen(false);
+			return;
+		}
+		resolve();
+	});
+
+	const close = () => {
+		mainWindow.blur();
+
+		if (process.platform === 'darwin' || state.hideOnClose) {
+			mainWindow.hide();
+			return;
+		}
+
+		if (process.platform === 'win32') {
+			mainWindow.minimize();
+			return;
+		}
+
+		mainWindow.destroy();
+	};
+
+	mainWindow.on('resize', () => windowStateHandler.fetchAndSave());
+	mainWindow.on('move', () => windowStateHandler.fetchAndSave());
+	mainWindow.on('show', () => windowStateHandler.fetchAndSave());
+	mainWindow.on('close', async (event) => {
+		if (!mainWindow) {
+			return;
+		}
+
+		event.preventDefault();
+		await exitFullscreen();
+		close();
+		windowStateHandler.fetchAndSave();
+	});
+
+	mainWindow.on('set-state', setState);
+};
+
+export const setupMainWindowStateHandling = () => {
+	attachWindowStateHandling(remote.getCurrentWindow());
+
+	if (process.env.NODE_ENV === 'development') {
+		remote.getCurrentWebContents().openDevTools();
+	}
+};
