@@ -1,69 +1,81 @@
-import { remote, ipcRenderer } from 'electron';
+import { desktopCapturer, ipcRenderer } from 'electron';
 import i18n from '../../i18n';
 
+let dialog;
 
-const getPathFromApp = (path) => `${ remote.app.getAppPath() }/app/${ path }`;
+const mount = () => {
+	dialog = document.querySelector('.screenshare-page');
 
-let window;
+	dialog.querySelector('.screenshare-title').innerText = i18n.__('dialog.screenshare.announcement');
+
+	dialog.addEventListener('click', (event) => {
+		const { clientLeft, clientTop, clientWidth, clientHeight } = dialog;
+		const { left, top } = dialog.getBoundingClientRect();
+		const { clientX, clientY } = event;
+
+		const minX = left + clientLeft;
+		const minY = top + clientTop;
+		if ((clientX < minX || clientX >= minX + clientWidth) || (clientY < minY || clientY >= minY + clientHeight)) {
+			ipcRenderer.emit('screenshare-result', null, 'PermissionDeniedError');
+			dialog.close();
+		}
+	}, false);
+
+	const template = dialog.querySelector('.screenshare-source-template');
+
+	desktopCapturer.getSources({ types: ['window', 'screen'] }, (error, sources) => {
+		if (error) {
+			throw error;
+		}
+
+		document.querySelector('.screenshare-sources').innerHTML = '';
+
+		sources.forEach(({ id, name, thumbnail }) => {
+			const sourceView = document.importNode(template.content, true);
+
+			sourceView.querySelector('.screenshare-source-thumbnail img').setAttribute('alt', name);
+			sourceView.querySelector('.screenshare-source-thumbnail img').setAttribute('src', thumbnail.toDataURL());
+			sourceView.querySelector('.screenshare-source-name').textContent = name;
+
+			sourceView.querySelector('.screenshare-source').addEventListener('click', () => {
+				ipcRenderer.emit('select-screenshare-source', null, id);
+
+				dialog.close();
+			}, false);
+
+			document.querySelector('.screenshare-sources').appendChild(sourceView);
+		});
+	});
+};
 
 const open = () => {
-	if (window) {
+	if (!dialog) {
+		mount();
+	}
+
+	if (dialog.open) {
 		return;
 	}
 
-	const mainWindow = remote.getCurrentWindow();
-	window = new remote.BrowserWindow({
-		width: 776,
-		height: 600,
-		useContentSize: true,
-		center: true,
-		resizable: false,
-		minimizable: false,
-		maximizable: false,
-		fullscreen: false,
-		fullscreenable: false,
-		skipTaskbar: true,
-		title: i18n.__('dialog.screenshare.title'),
-		show: false,
-		parent: mainWindow,
-		modal: process.platform !== 'darwin',
-		backgroundColor: '#F4F4F4',
-		type: process.platform === 'darwin' ? 'desktop' : 'toolbar',
-		webPreferences: {
-			devTools: false,
-			nodeIntegration: true,
-		},
-	});
-	window.setMenuBarVisibility(false);
-
-	window.once('ready-to-show', () => {
-		window.show();
-	});
-
-	window.once('closed', () => {
-		if (!window.resultSent) {
-			mainWindow.webContents.send('screenshare-result', 'PermissionDeniedError');
-		}
-		window = null;
-	});
-
-	window.loadFile(getPathFromApp('public/dialogs/screenshare.html'));
+	dialog.showModal();
 };
 
 const close = () => {
-	if (!window) {
+	if (!dialog) {
+		mount();
+	}
+
+	if (!dialog.open) {
 		return;
 	}
-	window.destroy();
+
+	ipcRenderer.emit('screenshare-result', null, 'PermissionDeniedError');
+	dialog.close();
 };
 
 const selectSource = (id) => {
-	const mainWindow = remote.getCurrentWindow();
-	mainWindow.webContents.send('screenshare-result', id);
-	if (window) {
-		window.resultSent = true;
-		window.destroy();
-	}
+	ipcRenderer.emit('screenshare-result', null, id);
+	dialog.close();
 };
 
 ipcRenderer.on('select-screenshare-source', (e, ...args) => selectSource(...args));
