@@ -12,6 +12,7 @@ import certificates, { setupCertificates } from './certificates';
 import { setupMainWindowStateHandling } from './mainWindow';
 import { setupBasicAuthentication } from './basicAuth';
 import { setupDeepLinks } from './deepLinks';
+import { setupUpdates } from './updates';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -308,6 +309,7 @@ export default () => {
 	setupBasicAuthentication();
 	setupCertificates();
 	setupDeepLinks();
+	setupUpdates();
 
 	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

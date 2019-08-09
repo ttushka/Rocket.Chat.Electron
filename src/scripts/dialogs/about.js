@@ -1,6 +1,7 @@
 import { remote, ipcRenderer } from 'electron';
 import i18n from '../../i18n';
 import { copyright } from '../../../package.json';
+import { canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates } from '../updates';
 
 
 let dialog;
@@ -27,21 +28,16 @@ const mount = () => {
 		}
 	}, false);
 
-	const canUpdate = ipcRenderer.sendSync('can-update');
-
-	if (canUpdate) {
-		const canAutoUpdate = ipcRenderer.sendSync('can-auto-update');
-
-		if (canAutoUpdate) {
+	if (canUpdate()) {
+		if (canAutoUpdate()) {
 			dialog.querySelector('.check-for-updates-on-start').setAttribute('checked', 'checked');
 		} else {
 			dialog.querySelector('.check-for-updates-on-start').removeAttribute('checked');
 		}
 
-		const canSetAutoUpdate = ipcRenderer.sendSync('can-set-auto-update');
-		if (canSetAutoUpdate) {
+		if (canSetAutoUpdate()) {
 			dialog.querySelector('.check-for-updates-on-start').addEventListener('change', (event) => {
-				ipcRenderer.send('set-auto-update', event.target.checked);
+				setAutoUpdate(event.target.checked);
 			});
 		} else {
 			dialog.querySelector('.check-for-updates-on-start').setAttribute('disabled', 'disabled');
@@ -52,7 +48,7 @@ const mount = () => {
 			dialog.querySelector('.check-for-updates').setAttribute('disabled', 'disabled');
 			dialog.querySelector('.check-for-updates').classList.add('hidden');
 			dialog.querySelector('.checking-for-updates').classList.remove('hidden');
-			ipcRenderer.send('check-for-updates', { forced: true });
+			checkForUpdates({ forced: true });
 		}, false);
 
 		const resetUpdatesSection = () => {

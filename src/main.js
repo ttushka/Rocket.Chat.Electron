@@ -1,7 +1,6 @@
-import { app, ipcMain } from 'electron';
+import { app } from 'electron';
 import { setupErrorHandling } from './errorHandling';
 import { setupUserData } from './main/userData';
-import './main/updates';
 import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
 import i18n from './i18n';
 
@@ -49,11 +48,10 @@ const prepareApp = () => {
 	});
 };
 
+prepareApp();
 (async () => {
-	prepareApp();
 	await app.whenReady();
 	await i18n.initialize();
 	unsetDefaultApplicationMenu();
 	createMainWindow();
-	ipcMain.emit('check-for-updates');
 })();

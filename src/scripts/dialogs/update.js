@@ -1,5 +1,6 @@
 import { remote, ipcRenderer } from 'electron';
 import i18n from '../../i18n';
+import { skipUpdateVersion, downloadUpdate } from '../updates';
 
 
 let dialog;
@@ -36,14 +37,13 @@ const mount = () => {
 			buttons: [i18n.__('dialog.updateSkip.ok')],
 			defaultId: 0,
 		}, () => {
-			ipcRenderer.send('skip-update-version', dialog.querySelector('.new-version .app-version-value').innerText);
+			skipUpdateVersion(dialog.querySelector('.new-version .app-version-value').innerText);
 			dialog.close();
 		});
 	}, false);
 
 	dialog.querySelector('.update-remind-action').addEventListener('click', (event) => {
 		event.preventDefault();
-		ipcRenderer.send('remind-update-later');
 		dialog.close();
 	}, false);
 
@@ -56,7 +56,7 @@ const mount = () => {
 			buttons: [i18n.__('dialog.updateDownloading.ok')],
 			defaultId: 0,
 		}, () => {
-			ipcRenderer.send('download-update');
+			downloadUpdate();
 			dialog.close();
 		});
 	}, false);
