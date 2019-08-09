@@ -1,6 +1,6 @@
 import querystring from 'querystring';
 import url from 'url';
-import { getMainWindow } from './mainWindow';
+import { remote, ipcRenderer } from 'electron';
 
 
 const normalizeUrl = (hostUrl) => {
@@ -11,17 +11,15 @@ const normalizeUrl = (hostUrl) => {
 	return hostUrl;
 };
 
-const processAuth = async ({ host, token, userId }) => {
-	const mainWindow = await getMainWindow();
+const processAuth = ({ host, token, userId }) => {
 	const hostUrl = normalizeUrl(host);
-	mainWindow.send('add-host', hostUrl, { token, userId });
+	ipcRenderer.emit('add-host', null, hostUrl, { token, userId });
 };
 
 const processRoom = async ({ host, rid, path }) => {
-	const mainWindow = await getMainWindow();
 	const hostUrl = normalizeUrl(host);
-	mainWindow.send('add-host', hostUrl);
-	mainWindow.send('open-room', hostUrl, { rid, path });
+	ipcRenderer.emit('add-host', null, hostUrl);
+	ipcRenderer.emit('open-room', null, hostUrl, { rid, path });
 };
 
 export const processDeepLink = (link) => {
@@ -41,4 +39,18 @@ export const processDeepLink = (link) => {
 			break;
 		}
 	}
+};
+
+export const setupDeepLinks = () => {
+	remote.app.on('open-url', (event, url) => {
+		processDeepLink(url);
+	});
+
+	remote.app.on('second-instance', (event, argv) => {
+		argv.slice(2).forEach(processDeepLink);
+	});
+
+	setImmediate(() => {
+		remote.process.argv.slice(2).forEach(processDeepLink);
+	});
 };

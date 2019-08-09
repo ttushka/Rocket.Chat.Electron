@@ -1,7 +1,6 @@
 import { app, ipcMain } from 'electron';
 import { setupErrorHandling } from './errorHandling';
 import { setupUserData } from './main/userData';
-import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
 import i18n from './i18n';
@@ -33,15 +32,6 @@ const prepareApp = () => {
 		app.quit();
 	});
 
-	app.on('open-url', (event, url) => {
-		event.preventDefault();
-		processDeepLink(url);
-	});
-
-	app.on('second-instance', (event, argv) => {
-		argv.slice(2).forEach(processDeepLink);
-	});
-
 	app.on('activate', async () => {
 		(await getMainWindow()).show();
 	});
@@ -53,6 +43,10 @@ const prepareApp = () => {
 	app.on('certificate-error', (event) => {
 		event.preventDefault();
 	});
+
+	app.on('open-url', (event) => {
+		event.preventDefault();
+	});
 };
 
 (async () => {
@@ -61,6 +55,5 @@ const prepareApp = () => {
 	await i18n.initialize();
 	unsetDefaultApplicationMenu();
 	createMainWindow();
-	process.argv.slice(2).forEach(processDeepLink);
 	ipcMain.emit('check-for-updates');
 })();
