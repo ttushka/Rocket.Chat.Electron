@@ -5,7 +5,6 @@ import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
 import i18n from './i18n';
-import certificateStore from './main/certificateStore';
 
 
 const prepareApp = () => {
@@ -50,6 +49,10 @@ const prepareApp = () => {
 	app.on('login', (event) => {
 		event.preventDefault();
 	});
+
+	app.on('certificate-error', (event) => {
+		event.preventDefault();
+	});
 };
 
 (async () => {
@@ -60,5 +63,4 @@ const prepareApp = () => {
 	createMainWindow();
 	process.argv.slice(2).forEach(processDeepLink);
 	ipcMain.emit('check-for-updates');
-	certificateStore.initialize();
 })();

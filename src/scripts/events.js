@@ -8,6 +8,7 @@ import menus from './menus';
 import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
+import certificates, { setupCertificates } from './certificates';
 import { setupMainWindowStateHandling } from './mainWindow';
 import { setupBasicAuthentication } from './basicAuth';
 
@@ -100,7 +101,7 @@ export default () => {
 
 	menus.on('reload-server', ({ ignoringCache = false, clearCertificates = false } = {}) => {
 		if (clearCertificates) {
-			ipcRenderer.send('certificates/clear');
+			certificates.clear();
 		}
 
 		const activeWebview = webview.getActive();
@@ -303,6 +304,7 @@ export default () => {
 	updateWindowState();
 	setupMainWindowStateHandling();
 	setupBasicAuthentication();
+	setupCertificates();
 
 	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

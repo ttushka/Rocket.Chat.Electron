@@ -1,23 +1,20 @@
-import { app, dialog, ipcMain } from 'electron';
+import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
 import url from 'url';
-import { getMainWindow } from './mainWindow';
 import i18n from '../i18n';
 
 
 class CertificateStore {
 	async initialize() {
 		this.storeFileName = 'certificate.json';
-		this.userDataDir = jetpack.cwd(app.getPath('userData'));
+		this.userDataDir = jetpack.cwd(remote.app.getPath('userData'));
 
 		await this.load();
 
 		// Don't ask twice for same cert if loading multiple urls
 		this.queued = {};
 
-		app.on('certificate-error', async (event, webContents, certificateUrl, error, certificate, callback) => {
-			event.preventDefault();
-
+		remote.app.on('certificate-error', (event, webContents, certificateUrl, error, certificate, callback) => {
 			if (this.isTrusted(certificateUrl, certificate)) {
 				callback(true);
 				return;
@@ -35,7 +32,7 @@ class CertificateStore {
 				detail = i18n.__('error.differentCertificate', { detail });
 			}
 
-			dialog.showMessageBox(await getMainWindow(), {
+			remote.dialog.showMessageBox(remote.getCurrentWindow(), {
 				title: i18n.__('dialog.certificateError.title'),
 				message: i18n.__('dialog.certificateError.message', { issuerName: certificate.issuerName }),
 				detail,
@@ -111,6 +108,8 @@ class CertificateStore {
 
 const instance = new CertificateStore();
 
-ipcMain.on('certificates/clear', () => instance.clear());
+export const setupCertificates = () => {
+	instance.initialize();
+};
 
 export default instance;
