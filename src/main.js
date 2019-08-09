@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, ipcMain } from 'electron';
 import { setupErrorHandling } from './errorHandling';
 import { setupUserData } from './main/userData';
 import './main/basicAuth';
@@ -6,7 +6,7 @@ import { processDeepLink } from './main/deepLinks';
 import './main/updates';
 import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
 import i18n from './i18n';
-export { default as certificate } from './main/certificateStore';
+import certificateStore from './main/certificateStore';
 
 
 const prepareApp = () => {
@@ -55,6 +55,7 @@ const prepareApp = () => {
 	await i18n.initialize();
 	unsetDefaultApplicationMenu();
 	createMainWindow();
-	app.emit('start');
 	process.argv.slice(2).forEach(processDeepLink);
+	ipcMain.emit('check-for-updates');
+	certificateStore.initialize();
 })();

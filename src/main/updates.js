@@ -184,5 +184,3 @@ ipcMain.on('check-for-updates', (e, ...args) => checkForUpdates(e, ...args));
 ipcMain.on('skip-update-version', (e, ...args) => skipUpdateVersion(...args));
 ipcMain.on('remind-update-later', () => {});
 ipcMain.on('download-update', () => downloadUpdate());
-
-app.once('start', () => ipcMain.emit('check-for-updates'));

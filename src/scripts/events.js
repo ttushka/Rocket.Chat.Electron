@@ -12,7 +12,6 @@ import { setupMainWindowStateHandling } from './mainWindow';
 
 
 const { app, getCurrentWindow, shell } = remote;
-const { certificate } = remote.require('./main');
 
 const updatePreferences = () => {
 	const mainWindow = getCurrentWindow();
@@ -100,7 +99,7 @@ export default () => {
 
 	menus.on('reload-server', ({ ignoringCache = false, clearCertificates = false } = {}) => {
 		if (clearCertificates) {
-			certificate.clear();
+			ipcRenderer.send('certificates/clear');
 		}
 
 		const activeWebview = webview.getActive();

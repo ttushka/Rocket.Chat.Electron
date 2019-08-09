@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
 import jetpack from 'fs-jetpack';
 import url from 'url';
 import { getMainWindow } from './mainWindow';
@@ -111,7 +111,6 @@ class CertificateStore {
 
 const instance = new CertificateStore();
 
-app.once('start', instance.initialize.bind(instance));
-
+ipcMain.on('certificates/clear', () => instance.clear());
 
 export default instance;
