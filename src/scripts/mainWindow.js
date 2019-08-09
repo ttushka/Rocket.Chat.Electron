@@ -204,6 +204,10 @@ const attachWindowStateHandling = async (mainWindow) => {
 export const setupMainWindowStateHandling = () => {
 	attachWindowStateHandling(remote.getCurrentWindow());
 
+	remote.app.on('activate', async () => {
+		remote.getCurrentWindow().show();
+	});
+
 	if (process.env.NODE_ENV === 'development') {
 		remote.getCurrentWebContents().openDevTools();
 	}

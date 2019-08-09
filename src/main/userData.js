@@ -27,7 +27,6 @@ export const setupUserData = () => {
 		return;
 	}
 
-
 	ipcMain.on('reset-app-data', () => {
 		app.relaunch({ args: [process.argv[1], resetUserDataCommandLineFlag] });
 		app.quit();

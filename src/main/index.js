@@ -1,8 +1,7 @@
 import { app } from 'electron';
-import { setupErrorHandling } from './errorHandling';
-import { setupUserData } from './main/userData';
-import { getMainWindow, unsetDefaultApplicationMenu, createMainWindow } from './main/mainWindow';
-import i18n from './i18n';
+import { setupErrorHandling } from '../errorHandling';
+import { setupUserData } from './userData';
+import { setupMainWindow } from './mainWindow';
 
 
 const prepareApp = () => {
@@ -22,17 +21,8 @@ const prepareApp = () => {
 
 	app.commandLine.appendSwitch('--autoplay-policy', 'no-user-gesture-required');
 
-	// TODO: make it a setting
-	if (process.platform === 'linux') {
-		app.disableHardwareAcceleration();
-	}
-
 	app.on('window-all-closed', () => {
 		app.quit();
-	});
-
-	app.on('activate', async () => {
-		(await getMainWindow()).show();
 	});
 
 	app.on('login', (event) => {
@@ -48,10 +38,9 @@ const prepareApp = () => {
 	});
 };
 
-prepareApp();
-(async () => {
-	await app.whenReady();
-	await i18n.initialize();
-	unsetDefaultApplicationMenu();
-	createMainWindow();
-})();
+if (require.main === module) {
+	prepareApp();
+	app.whenReady().then(() => {
+		setupMainWindow();
+	});
+}
