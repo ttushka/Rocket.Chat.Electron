@@ -9,7 +9,6 @@ import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
 import certificates, { setupCertificates } from './certificates';
-import { setupMainWindowStateHandling } from './mainWindow';
 import { setupBasicAuthentication } from './basicAuth';
 import { setupDeepLinks } from './deepLinks';
 import { setupUpdates } from './updates';
@@ -305,7 +304,6 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
-	setupMainWindowStateHandling();
 	setupBasicAuthentication();
 	setupCertificates();
 	setupDeepLinks();
