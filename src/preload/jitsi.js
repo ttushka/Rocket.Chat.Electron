@@ -1,18 +1,22 @@
 import { desktopCapturer, remote } from 'electron';
 import url from 'url';
-import util from 'util';
 import { getSettings } from './rocketChat';
+
+
 const { app } = remote;
 
+const getPathFromApp = (path) => `${ app.getAppPath() }/app/${ path }`;
 
-const getScreenSources = util.promisify(desktopCapturer.getSources.bind(desktopCapturer));
 const JitsiMeetElectron = {
-	async obtainDesktopStreams(callback, errorCallback, options = {}) {
-		try {
-			callback(await getScreenSources(options));
-		} catch (error) {
-			errorCallback(error);
-		}
+	obtainDesktopStreams(callback, errorCallback, options = {}) {
+		desktopCapturer.getSources(options, (error, sources) => {
+			if (error) {
+				errorCallback(error);
+				return;
+			}
+
+			callback(sources);
+		});
 	},
 };
 
@@ -22,9 +26,9 @@ const wrapWindowOpen = (defaultWindowOpen) => (href, frameName, features) => {
 	if (settings && url.parse(href).host === settings.get('Jitsi_Domain')) {
 		features = [
 			features,
-			'nodeIntegration=true',
-			`preload=${ `${ app.getAppPath() }/app/preload.js` }`,
-		].join(',');
+			'nodeIntegration=yes',
+			`preload=${ getPathFromApp('preload.js') }`,
+		].filter(Boolean).join(',');
 	}
 
 	return defaultWindowOpen.call(window, href, frameName, features);

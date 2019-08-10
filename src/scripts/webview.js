@@ -42,8 +42,7 @@ class WebView extends EventEmitter {
 		webviewObj.classList.add('webview');
 		webviewObj.setAttribute('server', host.url);
 		webviewObj.setAttribute('preload', '../preload.js');
-		webviewObj.setAttribute('allowpopups', 'on');
-		webviewObj.setAttribute('disablewebsecurity', 'on');
+		webviewObj.setAttribute('disablewebsecurity', 'disablewebsecurity');
 
 		webviewObj.addEventListener('did-navigate-in-page', (lastPath) => {
 			if ((lastPath.url).includes(host.url)) {

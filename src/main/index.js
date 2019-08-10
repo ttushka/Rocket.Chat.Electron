@@ -20,6 +20,7 @@ const prepareApp = () => {
 	}
 
 	app.commandLine.appendSwitch('--autoplay-policy', 'no-user-gesture-required');
+	app.commandLine.appendSwitch('disable-site-isolation-trials');
 
 	app.on('window-all-closed', () => {
 		app.quit();

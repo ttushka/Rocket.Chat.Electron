@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu } from 'electron';
+import { parse as parseURL } from 'url';
 
 
 const getPathFromApp = (path) => `${ app.getAppPath() }/app/${ path }`;
@@ -30,6 +31,43 @@ export const setupMainWindow = () => {
 			nodeIntegration: true,
 			webviewTag: true,
 		},
+	});
+
+	const handleNewWindow = (event, url, frameName, disposition, options) => {
+		event.preventDefault();
+
+		const {
+			webPreferences: {
+				preloadURL,
+				...webPreferences
+			} = {},
+		} = options;
+
+		const window = new BrowserWindow({
+			...options,
+			webPreferences: {
+				...webPreferences,
+				preload: preloadURL ? parseURL(preloadURL).path : undefined,
+			},
+			show: false,
+		});
+
+		window.setMenu(null);
+		window.setMenuBarVisibility(false);
+
+		window.once('ready-to-show', () => {
+			window.show();
+		});
+
+		if (!options.webContents) {
+			window.loadURL(url);
+		}
+
+		event.newGuest = window;
+	};
+
+	mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
+		webContents.on('new-window', handleNewWindow);
 	});
 
 	mainWindow.loadFile(getPathFromApp('public/app.html'));
