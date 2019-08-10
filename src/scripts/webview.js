@@ -1,7 +1,9 @@
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, remote } from 'electron';
 import { EventEmitter } from 'events';
 import servers from './servers';
 import screenshare from './dialogs/screenshare';
+import { spellCheckWords } from './spellChecking';
+import { createContextMenuTemplate } from './contextMenu';
 
 
 class WebView extends EventEmitter {
@@ -67,6 +69,14 @@ class WebView extends EventEmitter {
 					webviewObj.loadURL(server);
 					break;
 				}
+				case 'spell-checker/check': {
+					const [id, words] = event.args;
+					const callback = (mispeltWords) => {
+						webviewObj.send('spell-checker/check/result', id, mispeltWords);
+					};
+					spellCheckWords(words, callback);
+					break;
+				}
 			}
 		});
 
@@ -85,6 +95,15 @@ class WebView extends EventEmitter {
 			if (e.resourceType === 'mainFrame' && e.httpResponseCode >= 500) {
 				webviewObj.loadURL(`file://${ __dirname }/loading-error.html`);
 			}
+		});
+
+		webviewObj.addEventListener('context-menu', (event) => {
+			event.preventDefault();
+			const menu = remote.Menu.buildFromTemplate(createContextMenuTemplate({
+				webContents: webviewObj.getWebContents(),
+				...event.params,
+			}));
+			menu.popup({ window: remote.getCurrentWindow() });
 		});
 
 		this.webviewParentElement.appendChild(webviewObj);

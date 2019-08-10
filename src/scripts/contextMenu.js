@@ -1,23 +1,31 @@
 import { clipboard, remote, shell } from 'electron';
 import i18n from '../i18n';
-import { spellchecking } from './spellchecking';
-const { dialog, getCurrentWebContents, getCurrentWindow, Menu } = remote;
+import {
+	getSpellCheckingCorrections,
+	installSpellCheckingDictionaries,
+	getSpellCheckingDictionariesPath,
+	getSpellCheckingDictionaries,
+	getEnabledSpellCheckingDictionaries,
+	setSpellCheckingDictionaryEnabled,
+} from './spellChecking';
+const { dialog, getCurrentWindow } = remote;
 
 
-const createSpellCheckingMenuTemplate = async ({
+const createSpellCheckingMenuTemplate = ({
 	isEditable,
 	selectionText,
+	webContents,
 }) => {
 	if (!isEditable) {
 		return [];
 	}
 
-	const corrections = spellchecking.getCorrections(selectionText);
+	const corrections = getSpellCheckingCorrections(selectionText);
 
 	const handleBrowserForLanguage = () => {
 		const callback = async (filePaths) => {
 			try {
-				await spellchecking.installDictionaries(filePaths);
+				await installSpellCheckingDictionaries(filePaths);
 			} catch (error) {
 				console.error(error);
 				dialog.showErrorBox(
@@ -29,7 +37,7 @@ const createSpellCheckingMenuTemplate = async ({
 
 		dialog.showOpenDialog(getCurrentWindow(), {
 			title: i18n.__('dialog.loadDictionary.title'),
-			defaultPath: spellchecking.dictionariesPath,
+			defaultPath: getSpellCheckingDictionariesPath(),
 			filters: [
 				{ name: i18n.__('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
 				{ name: i18n.__('dialog.loadDictionary.allFiles'), extensions: ['*'] },
@@ -50,7 +58,7 @@ const createSpellCheckingMenuTemplate = async ({
 			) : (
 				corrections.slice(0, 6).map((correction) => ({
 					label: correction,
-					click: () => getCurrentWebContents().replaceMisspelling(correction),
+					click: () => webContents.replaceMisspelling(correction),
 				}))
 			)),
 			...(corrections.length > 6 ? [
@@ -58,7 +66,7 @@ const createSpellCheckingMenuTemplate = async ({
 					label: i18n.__('contextMenu.moreSpellingSuggestions'),
 					submenu: corrections.slice(6).map((correction) => ({
 						label: correction,
-						click: () => getCurrentWebContents().replaceMisspelling(correction),
+						click: () => webContents.replaceMisspelling(correction),
 					})),
 				},
 			] : []),
@@ -68,15 +76,13 @@ const createSpellCheckingMenuTemplate = async ({
 		] : []),
 		{
 			label: i18n.__('contextMenu.spellingLanguages'),
-			enabled: spellchecking.dictionaries.length > 0,
+			enabled: getSpellCheckingDictionaries().length > 0,
 			submenu: [
-				...spellchecking.dictionaries.map((dictionaryName) => ({
+				...getSpellCheckingDictionaries().map((dictionaryName) => ({
 					label: dictionaryName,
 					type: 'checkbox',
-					checked: spellchecking.enabledDictionaries.includes(dictionaryName),
-					click: ({ checked }) => (checked ?
-						spellchecking.enable(dictionaryName) :
-						spellchecking.disable(dictionaryName)),
+					checked: getEnabledSpellCheckingDictionaries().includes(dictionaryName),
+					click: ({ checked }) => setSpellCheckingDictionaryEnabled(dictionaryName, checked),
 				})),
 				{
 					type: 'separator',
@@ -96,12 +102,13 @@ const createSpellCheckingMenuTemplate = async ({
 const createImageMenuTemplate = ({
 	mediaType,
 	srcURL,
+	webContents,
 }) => (
 	mediaType === 'image' ?
 		[
 			{
 				label: i18n.__('contextMenu.saveImageAs'),
-				click: () => getCurrentWebContents().downloadURL(srcURL),
+				click: () => webContents.downloadURL(srcURL),
 			},
 			{
 				type: 'separator',
@@ -187,19 +194,9 @@ const createDefaultMenuTemplate = ({
 	},
 ];
 
-const createMenuTemplate = async (params) => [
-	...(await createSpellCheckingMenuTemplate(params)),
-	...(await createImageMenuTemplate(params)),
-	...(await createLinkMenuTemplate(params)),
-	...(await createDefaultMenuTemplate(params)),
+export const createContextMenuTemplate = (params) => [
+	...createSpellCheckingMenuTemplate(params),
+	...createImageMenuTemplate(params),
+	...createLinkMenuTemplate(params),
+	...createDefaultMenuTemplate(params),
 ];
-
-export default () => {
-	getCurrentWebContents().on('context-menu', (event, params) => {
-		event.preventDefault();
-		(async () => {
-			const menu = Menu.buildFromTemplate(await createMenuTemplate(params));
-			menu.popup({ window: getCurrentWindow() });
-		})();
-	});
-};

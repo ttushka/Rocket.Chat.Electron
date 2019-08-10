@@ -1,10 +1,11 @@
-import { remote, webFrame } from 'electron';
+import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
 import mem from 'mem';
 import path from 'path';
 import spellchecker from 'spellchecker';
-const { app } = remote;
 
+
+const { app } = remote;
 
 class SpellCheck {
 	constructor() {
@@ -102,41 +103,35 @@ class SpellCheck {
 	}
 
 	updateChecker() {
-		try {
-			if (this.enabledDictionaries.length === 0) {
-				this.checker = () => true;
-				return;
-			}
-
-			if (this.enabledDictionaries.length === 1) {
-				let enabled = false;
-				this.checker = mem((text) => {
-					if (!enabled) {
-						spellchecker.setDictionary(this.enabledDictionaries[0], this.dictionariesPath);
-						enabled = true;
-					}
-					return !spellchecker.isMisspelled(text);
-				});
-				return;
-			}
-
-			const singleDictionaryChecker = mem(
-				((dictionariesPath, dictionary, text) => {
-					spellchecker.setDictionary(dictionary, dictionariesPath);
-					return !spellchecker.isMisspelled(text);
-				})
-					.bind(null, this.dictionariesPath)
-			);
-
-			this.checker = mem(
-				((dictionaries, text) => dictionaries.some((dictionary) => singleDictionaryChecker(dictionary, text)))
-					.bind(null, this.enabledDictionaries)
-			);
-		} finally {
-			webFrame.setSpellCheckProvider('', {
-				spellCheck: (words, callback) => callback(words.filter((word) => !this.checker(word))),
-			});
+		if (this.enabledDictionaries.length === 0) {
+			this.checker = () => true;
+			return;
 		}
+
+		if (this.enabledDictionaries.length === 1) {
+			let enabled = false;
+			this.checker = mem((text) => {
+				if (!enabled) {
+					spellchecker.setDictionary(this.enabledDictionaries[0], this.dictionariesPath);
+					enabled = true;
+				}
+				return !spellchecker.isMisspelled(text);
+			});
+			return;
+		}
+
+		const singleDictionaryChecker = mem(
+			((dictionariesPath, dictionary, text) => {
+				spellchecker.setDictionary(dictionary, dictionariesPath);
+				return !spellchecker.isMisspelled(text);
+			})
+				.bind(null, this.dictionariesPath)
+		);
+
+		this.checker = mem(
+			((dictionaries, text) => dictionaries.some((dictionary) => singleDictionaryChecker(dictionary, text)))
+				.bind(null, this.enabledDictionaries)
+		);
 	}
 
 	isCorrect(text) {
@@ -173,8 +168,30 @@ class SpellCheck {
 	}
 }
 
-export const spellchecking = new SpellCheck;
+const spellchecking = new SpellCheck();
 
-export default () => {
+export const setupSpellChecking = () => {
 	spellchecking.load();
 };
+
+export const spellCheckWords = (words, callback) => callback(words.filter((word) => !spellchecking.checker(word)));
+
+export const getSpellCheckingCorrections = (text) => spellchecking.getCorrections(text);
+
+export const installSpellCheckingDictionaries = async (filePaths) => {
+	await spellchecking.installDictionaries(filePaths);
+};
+
+export const getSpellCheckingDictionaries = () => spellchecking.dictionaries;
+
+export const getEnabledSpellCheckingDictionaries = () => spellchecking.enabledDictionaries;
+
+export const setSpellCheckingDictionaryEnabled = (dictionaryName, isEnabled) => {
+	if (isEnabled) {
+		spellchecking.enable(dictionaryName);
+	} else {
+		spellchecking.disable(dictionaryName);
+	}
+};
+
+export const getSpellCheckingDictionariesPath = () => spellchecking.dictionariesPath;
