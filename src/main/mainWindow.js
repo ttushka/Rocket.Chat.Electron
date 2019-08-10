@@ -28,6 +28,7 @@ export const setupMainWindow = () => {
 		show: false,
 		webPreferences: {
 			nodeIntegration: true,
+			webviewTag: true,
 		},
 	});
 
