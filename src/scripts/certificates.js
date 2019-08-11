@@ -1,8 +1,8 @@
 import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
+import { t } from 'i18next';
 import { parse as parseURL } from 'url';
 import { reportError } from '../errorHandling';
-import i18n from '../i18n';
 import ipc from '../ipc';
 import { showMessageBox } from './dialogs';
 
@@ -85,13 +85,13 @@ const handleAppCertificateError = (event, webContents, certificateUrl, error, ce
 const handleCertificateTrustRequest = async (webContentsId, certificateUrl, error, certificate, isReplacing) => {
 	const { fingerprint, issuerName } = certificate || {};
 
-	const title = i18n.__('dialog.certificateError.title');
-	const message = i18n.__('dialog.certificateError.message', {
+	const title = t('dialog.certificateError.title');
+	const message = t('dialog.certificateError.message', {
 		issuerName,
 	});
 	let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
 	if (isReplacing) {
-		detail = i18n.__('error.differentCertificate', { detail });
+		detail = t('error.differentCertificate', { detail });
 	}
 
 	const { response } = await showMessageBox({
@@ -100,8 +100,8 @@ const handleCertificateTrustRequest = async (webContentsId, certificateUrl, erro
 		detail,
 		type: 'warning',
 		buttons: [
-			i18n.__('dialog.certificateError.yes'),
-			i18n.__('dialog.certificateError.no'),
+			t('dialog.certificateError.yes'),
+			t('dialog.certificateError.no'),
 		],
 		cancelId: 1,
 	});

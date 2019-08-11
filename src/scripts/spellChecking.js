@@ -155,9 +155,9 @@ class SpellCheck {
 
 	async installDictionaries(filePaths) {
 		for (const filePath of filePaths) {
-			const name = filePath.basename(filePath, filePath.extname(filePath));
-			const basename = filePath.basename(filePath);
-			const newPath = filePath.join(this.dictionariesPath, basename);
+			const name = path.basename(filePath, path.extname(filePath));
+			const basename = path.basename(filePath);
+			const newPath = path.join(this.dictionariesPath, basename);
 
 			await jetpack.copyAsync(filePath, newPath);
 

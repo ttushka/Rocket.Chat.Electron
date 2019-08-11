@@ -286,7 +286,16 @@ class Servers extends EventEmitter {
 
 		ipcRenderer.send('reset-app-data');
 	}
-
 }
 
-export default new Servers();
+const instance = new Servers();
+
+export default instance;
+
+export const getServers = () => {
+	const sorting = JSON.parse(localStorage.getItem('rocket.chat.sortOrder')) || [];
+
+	return Object.values(instance.hosts)
+		.sort(({ url: a }, { url: b }) => sorting.indexOf(a) - sorting.indexOf(b))
+		.map(({ title, url }) => ({ title, url }));
+};

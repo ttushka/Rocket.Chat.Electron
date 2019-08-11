@@ -1,5 +1,6 @@
-import { remote, ipcRenderer } from 'electron';
-import servers from './servers';
+import { remote, ipcRenderer, clipboard } from 'electron';
+import { t } from 'i18next';
+import servers, { getServers } from './servers';
 import sidebar from './sidebar';
 import webview from './webview';
 import setTouchBar from './touchBar';
@@ -8,6 +9,15 @@ import menus from './menus';
 import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
+import { reportError } from '../errorHandling';
+import { showErrorBox, showOpenDialog } from './dialogs';
+import {
+	installSpellCheckingDictionaries,
+	getSpellCheckingDictionariesPath,
+	setSpellCheckingDictionaryEnabled,
+} from './spellChecking';
+import contextMenu from './contextMenu';
+import { clearCertificates } from './certificates';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -20,7 +30,7 @@ const updatePreferences = () => {
 	const hasMenuBar = localStorage.getItem('autohideMenu') !== 'true';
 	const hasSidebar = localStorage.getItem('sidebar-closed') !== 'true';
 
-	menus.setState({
+	menus.setProps({
 		showTrayIcon: hasTrayIcon,
 		showFullScreen: mainWindow.isFullScreen(),
 		showWindowOnUnreadChanged,
@@ -47,10 +57,8 @@ const updatePreferences = () => {
 const updateServers = () => {
 	const sorting = JSON.parse(localStorage.getItem('rocket.chat.sortOrder')) || [];
 
-	menus.setState({
-		servers: Object.values(servers.hosts)
-			.sort(({ url: a }, { url: b }) => (sidebar ? (sorting.indexOf(a) - sorting.indexOf(b)) : 0))
-			.map(({ title, url }) => ({ title, url })),
+	menus.setProps({
+		servers: getServers(),
 		currentServerUrl: servers.active,
 	});
 
@@ -80,95 +88,116 @@ const destroyAll = () => {
 
 export default () => {
 	window.addEventListener('beforeunload', destroyAll);
-	window.addEventListener('focus', () => webview.focusActive());
-
-	menus.on('quit', () => app.quit());
-	menus.on('about', () => about.open());
-	menus.on('open-url', (url) => shell.openExternal(url));
-
-	menus.on('add-new-server', () => {
-		getCurrentWindow().show();
-		servers.clearActive();
-		webview.showLanding();
+	window.addEventListener('focus', () => {
+		webview.focusActive();
 	});
 
-	menus.on('select-server', ({ url }) => {
-		getCurrentWindow().show();
-		servers.setActive(url);
-	});
-
-	menus.on('reload-server', ({ ignoringCache = false, clearCertificates = false } = {}) => {
-		if (clearCertificates) {
+	menus.setProps({
+		appName: app.getName(),
+		webContents: remote.getCurrentWebContents(),
+		onClickShowAbout: () => {
+			about.open();
+		},
+		onClickQuit: () => {
+			app.quit();
+		},
+		onClickAddNewServer: () => {
+			getCurrentWindow().show();
+			servers.clearActive();
+			webview.showLanding();
+		},
+		onClickUndo: (webContents) => {
+			webContents.undo();
+		},
+		onClickRedo: (webContents) => {
+			webContents.redo();
+		},
+		onClickCut: (webContents) => {
+			webContents.cut();
+		},
+		onClickCopy: (webContents) => {
+			webContents.copy();
+		},
+		onClickPaste: (webContents) => {
+			webContents.paste();
+		},
+		onClickSelectAll: (webContents) => {
+			webContents.selectAll();
+		},
+		onClickReload: (webContents) => {
+			if (webContents === remote.getCurrentWebContents()) {
+				return;
+			}
+			webContents.reload();
+		},
+		onClickReloadIgnoringCache: (webContents) => {
+			if (webContents === remote.getCurrentWebContents()) {
+				return;
+			}
+			webContents.reloadIgnoringCache();
+		},
+		onClickClearCertificates: () => {
 			clearCertificates();
-		}
-
-		const activeWebview = webview.getActive();
-		if (!activeWebview) {
-			return;
-		}
-
-		if (ignoringCache) {
-			activeWebview.reloadIgnoringCache();
-			return;
-		}
-
-		activeWebview.reload();
-	});
-
-	menus.on('open-devtools-for-server', () => {
-		const activeWebview = webview.getActive();
-		if (activeWebview) {
-			activeWebview.openDevTools();
-		}
-	});
-
-	menus.on('go-back', () => webview.goBack());
-	menus.on('go-forward', () => webview.goForward());
-
-	menus.on('reload-app', () => getCurrentWindow().reload());
-
-	menus.on('toggle-devtools', () => getCurrentWindow().toggleDevTools());
-
-	menus.on('reset-app-data', () => servers.resetAppData());
-
-	menus.on('toggle', (property) => {
-		switch (property) {
-			case 'showTrayIcon': {
-				const previousValue = localStorage.getItem('hideTray') !== 'true';
-				const newValue = !previousValue;
-				localStorage.setItem('hideTray', JSON.stringify(!newValue));
-				break;
+		},
+		onClickOpenDevToolsForServer: (webContents) => {
+			if (webContents === remote.getCurrentWebContents()) {
+				return;
 			}
-
-			case 'showFullScreen': {
-				const mainWindow = getCurrentWindow();
-				mainWindow.setFullScreen(!mainWindow.isFullScreen());
-				break;
-			}
-
-			case 'showWindowOnUnreadChanged': {
-				const previousValue = localStorage.getItem('showWindowOnUnreadChanged') === 'true';
-				const newValue = !previousValue;
-				localStorage.setItem('showWindowOnUnreadChanged', JSON.stringify(newValue));
-				break;
-			}
-
-			case 'showMenuBar': {
-				const previousValue = localStorage.getItem('autohideMenu') !== 'true';
-				const newValue = !previousValue;
-				localStorage.setItem('autohideMenu', JSON.stringify(!newValue));
-				break;
-			}
-
-			case 'showServerList': {
-				const previousValue = localStorage.getItem('sidebar-closed') !== 'true';
-				const newValue = !previousValue;
-				localStorage.setItem('sidebar-closed', JSON.stringify(!newValue));
-				break;
-			}
-		}
-
-		updatePreferences();
+			webContents.openDevTools();
+		},
+		onClickGoBack: (webContents) => {
+			webContents.goBack();
+		},
+		onClickGoForward: (webContents) => {
+			webContents.goForward();
+		},
+		onClickToggleShowTrayIcon: (isEnabled) => {
+			localStorage.setItem('hideTray', JSON.stringify(!isEnabled));
+			updatePreferences();
+		},
+		onClickToggleFullScreen: (isEnabled) => {
+			getCurrentWindow().setFullScreen(isEnabled);
+			updatePreferences();
+		},
+		onClickToggleMenuBar: (isEnabled) => {
+			localStorage.setItem('autohideMenu', JSON.stringify(!isEnabled));
+			updatePreferences();
+		},
+		onClickToggleSideBar: (isEnabled) => {
+			localStorage.setItem('sidebar-closed', JSON.stringify(!isEnabled));
+			updatePreferences();
+		},
+		onClickResetZoom: () => {
+			remote.getCurrentWebContents().setZoomLevel(0);
+		},
+		onClickZoomIn: () => {
+			const newZoomLevel = Math.min(remote.getCurrentWebContents().getZoomLevel() + 1, 9);
+			remote.getCurrentWebContents().setZoomLevel(newZoomLevel);
+		},
+		onClickZoomOut: () => {
+			const newZoomLevel = Math.max(remote.getCurrentWebContents().getZoomLevel() - 1, -9);
+			remote.getCurrentWebContents().setZoomLevel(newZoomLevel);
+		},
+		onClickSelectServer: ({ url }) => {
+			getCurrentWindow().show();
+			servers.setActive(url);
+		},
+		onClickReloadApp: () => {
+			remote.getCurrentWebContents().reloadIgnoringCache();
+		},
+		onClickToggleAppDevTools: () => {
+			remote.getCurrentWebContents().toggleDevTools();
+		},
+		onClickToggleShowWindowOnUnreadChanged: (isEnabled) => {
+			localStorage.setItem('showWindowOnUnreadChanged', JSON.stringify(isEnabled));
+			updatePreferences();
+		},
+		onClickOpenURL: (url) => {
+			shell.openExternal(url);
+		},
+		onClickResetAppData: () => {
+			servers.resetAppData();
+		},
 	});
 
 	servers.on('loaded', () => {
@@ -289,6 +318,66 @@ export default () => {
 			visible: hasSidebar,
 		});
 		webview.setSidebarPaddingEnabled(!hasSidebar);
+	});
+
+	contextMenu.setProps({
+		onClickReplaceMispelling: (webContents, correction) => {
+			webContents.replaceMisspelling(correction);
+		},
+		onClickToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
+			setSpellCheckingDictionaryEnabled(name, isEnabled);
+		},
+		onClickBrowseForSpellCheckLanguage: async () => {
+			const { filePaths } = await showOpenDialog({
+				title: t('dialog.loadDictionary.title'),
+				defaultPath: getSpellCheckingDictionariesPath(),
+				filters: [
+					{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
+					{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
+				],
+				properties: ['openFile', 'multiSelections'],
+			});
+
+			try {
+				await installSpellCheckingDictionaries(filePaths);
+			} catch (error) {
+				reportError(error);
+				showErrorBox(
+					t('dialog.loadDictionaryError.title'),
+					t('dialog.loadDictionaryError.message', { message: error.message })
+				);
+			}
+		},
+		onClickSaveImageAs: (webContents, url) => {
+			webContents.downloadURL(url);
+		},
+		onClickOpenLink: (webContents, url) => {
+			shell.openExternal(url);
+		},
+		onClickCopyLinkText: (webContents, url, text) => {
+			clipboard.write({ text, bookmark: text });
+		},
+		onClickCopyLinkAddress: (webContents, url, text) => {
+			clipboard.write({ text: url, bookmark: text });
+		},
+		onClickUndo: (webContents) => {
+			webContents.undo();
+		},
+		onClickRedo: (webContents) => {
+			webContents.redo();
+		},
+		onClickCut: (webContents) => {
+			webContents.cut();
+		},
+		onClickCopy: (webContents) => {
+			webContents.copy();
+		},
+		onClickPaste: (webContents) => {
+			webContents.paste();
+		},
+		onClickSelectAll: (webContents) => {
+			webContents.selectAll();
+		},
 	});
 
 	if (process.platform === 'darwin') {

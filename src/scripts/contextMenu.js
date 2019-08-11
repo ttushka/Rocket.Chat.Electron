@@ -1,72 +1,46 @@
-import { clipboard, remote, shell } from 'electron';
-import i18n from '../i18n';
-import {
-	getSpellCheckingCorrections,
-	installSpellCheckingDictionaries,
-	getSpellCheckingDictionariesPath,
-	getSpellCheckingDictionaries,
-	getEnabledSpellCheckingDictionaries,
-	setSpellCheckingDictionaryEnabled,
-} from './spellChecking';
-const { dialog, getCurrentWindow } = remote;
+import { remote } from 'electron';
+import { t } from 'i18next';
 
+
+const { getCurrentWindow, Menu } = remote;
+
+let props = {};
+let menu;
 
 const createSpellCheckingMenuTemplate = ({
 	isEditable,
-	selectionText,
 	webContents,
+	spellCheckingCorrections,
+	spellCheckingDictionaries,
+	onClickReplaceMispelling,
+	onClickToggleSpellCheckingDictionary,
+	onClickBrowseForSpellCheckLanguage,
 }) => {
 	if (!isEditable) {
 		return [];
 	}
 
-	const corrections = getSpellCheckingCorrections(selectionText);
-
-	const handleBrowserForLanguage = () => {
-		const callback = async (filePaths) => {
-			try {
-				await installSpellCheckingDictionaries(filePaths);
-			} catch (error) {
-				console.error(error);
-				dialog.showErrorBox(
-					i18n.__('dialog.loadDictionaryError.title'),
-					i18n.__('dialog.loadDictionaryError.message', { message: error.message })
-				);
-			}
-		};
-
-		dialog.showOpenDialog(getCurrentWindow(), {
-			title: i18n.__('dialog.loadDictionary.title'),
-			defaultPath: getSpellCheckingDictionariesPath(),
-			filters: [
-				{ name: i18n.__('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
-				{ name: i18n.__('dialog.loadDictionary.allFiles'), extensions: ['*'] },
-			],
-			properties: ['openFile', 'multiSelections'],
-		}, callback);
-	};
-
 	return [
-		...(corrections ? [
-			...(corrections.length === 0 ? (
+		...(spellCheckingCorrections ? [
+			...(spellCheckingCorrections.length === 0 ? (
 				[
 					{
-						label: i18n.__('contextMenu.noSpellingSuggestions'),
+						label: t('contextMenu.noSpellingSuggestions'),
 						enabled: false,
 					},
 				]
 			) : (
-				corrections.slice(0, 6).map((correction) => ({
+				spellCheckingCorrections.slice(0, 6).map((correction) => ({
 					label: correction,
-					click: () => webContents.replaceMisspelling(correction),
+					click: onClickReplaceMispelling && onClickReplaceMispelling.bind(null, webContents, correction),
 				}))
 			)),
-			...(corrections.length > 6 ? [
+			...(spellCheckingCorrections.length > 6 ? [
 				{
-					label: i18n.__('contextMenu.moreSpellingSuggestions'),
-					submenu: corrections.slice(6).map((correction) => ({
+					label: t('contextMenu.moreSpellingSuggestions'),
+					submenu: spellCheckingCorrections.slice(6).map((correction) => ({
 						label: correction,
-						click: () => webContents.replaceMisspelling(correction),
+						click: onClickReplaceMispelling && onClickReplaceMispelling.bind(null, webContents, correction),
 					})),
 				},
 			] : []),
@@ -75,21 +49,21 @@ const createSpellCheckingMenuTemplate = ({
 			},
 		] : []),
 		{
-			label: i18n.__('contextMenu.spellingLanguages'),
-			enabled: getSpellCheckingDictionaries().length > 0,
+			label: t('contextMenu.spellingLanguages'),
+			enabled: spellCheckingDictionaries.length > 0,
 			submenu: [
-				...getSpellCheckingDictionaries().map((dictionaryName) => ({
-					label: dictionaryName,
+				...spellCheckingDictionaries.map(({ name, enabled }) => ({
+					label: name,
 					type: 'checkbox',
-					checked: getEnabledSpellCheckingDictionaries().includes(dictionaryName),
-					click: ({ checked }) => setSpellCheckingDictionaryEnabled(dictionaryName, checked),
+					checked: enabled,
+					click: onClickToggleSpellCheckingDictionary && (({ checked }) => onClickToggleSpellCheckingDictionary(webContents, name, checked)),
 				})),
 				{
 					type: 'separator',
 				},
 				{
-					label: i18n.__('contextMenu.browseForLanguage'),
-					click: handleBrowserForLanguage,
+					label: t('contextMenu.browseForLanguage'),
+					click: onClickBrowseForSpellCheckLanguage && onClickBrowseForSpellCheckLanguage.bind(null, webContents),
 				},
 			],
 		},
@@ -103,12 +77,13 @@ const createImageMenuTemplate = ({
 	mediaType,
 	srcURL,
 	webContents,
+	onClickSaveImageAs,
 }) => (
 	mediaType === 'image' ?
 		[
 			{
-				label: i18n.__('contextMenu.saveImageAs'),
-				click: () => webContents.downloadURL(srcURL),
+				label: t('contextMenu.saveImageAs'),
+				click: onClickSaveImageAs && onClickSaveImageAs.bind(null, webContents, srcURL),
 			},
 			{
 				type: 'separator',
@@ -120,21 +95,25 @@ const createImageMenuTemplate = ({
 const createLinkMenuTemplate = ({
 	linkURL,
 	linkText,
+	webContents,
+	onClickOpenLink,
+	onClickCopyLinkText,
+	onClickCopyLinkAddress,
 }) => (
 	linkURL ?
 		[
 			{
-				label: i18n.__('contextMenu.openLink'),
-				click: () => shell.openExternal(linkURL),
+				label: t('contextMenu.openLink'),
+				click: onClickOpenLink && onClickOpenLink.bind(null, webContents, linkURL, linkText),
 			},
 			{
-				label: i18n.__('contextMenu.copyLinkText'),
-				click: () => clipboard.write({ text: linkText, bookmark: linkText }),
+				label: t('contextMenu.copyLinkText'),
 				enabled: !!linkText,
+				click: onClickCopyLinkText && onClickCopyLinkText.bind(null, webContents, linkURL, linkText),
 			},
 			{
-				label: i18n.__('contextMenu.copyLinkAddress'),
-				click: () => clipboard.write({ text: linkURL, bookmark: linkText }),
+				label: t('contextMenu.copyLinkAddress'),
+				click: onClickCopyLinkAddress && onClickCopyLinkAddress.bind(null, webContents, linkURL, linkText),
 			},
 			{
 				type: 'separator',
@@ -152,51 +131,77 @@ const createDefaultMenuTemplate = ({
 		canPaste = false,
 		canSelectAll = false,
 	} = {},
+	webContents,
+	onClickUndo,
+	onClickRedo,
+	onClickCut,
+	onClickCopy,
+	onClickPaste,
+	onClickSelectAll,
 } = {}) => [
 	{
-		label: i18n.__('contextMenu.undo'),
-		role: 'undo',
+		label: t('contextMenu.undo'),
 		accelerator: 'CommandOrControl+Z',
 		enabled: canUndo,
+		click: onClickUndo && onClickUndo.bind(null, webContents),
 	},
 	{
-		label: i18n.__('contextMenu.redo'),
-		role: 'redo',
+		label: t('contextMenu.redo'),
 		accelerator: process.platform === 'win32' ? 'Control+Y' : 'CommandOrControl+Shift+Z',
 		enabled: canRedo,
+		click: onClickRedo && onClickRedo.bind(null, webContents),
 	},
 	{
 		type: 'separator',
 	},
 	{
-		label: i18n.__('contextMenu.cut'),
-		role: 'cut',
+		label: t('contextMenu.cut'),
 		accelerator: 'CommandOrControl+X',
 		enabled: canCut,
+		click: onClickCut && onClickCut.bind(null, webContents),
 	},
 	{
-		label: i18n.__('contextMenu.copy'),
-		role: 'copy',
+		label: t('contextMenu.copy'),
 		accelerator: 'CommandOrControl+C',
 		enabled: canCopy,
+		click: onClickCopy && onClickCopy.bind(null, webContents),
 	},
 	{
-		label: i18n.__('contextMenu.paste'),
-		role: 'paste',
+		label: t('contextMenu.paste'),
 		accelerator: 'CommandOrControl+V',
 		enabled: canPaste,
+		click: onClickPaste && onClickPaste.bind(null, webContents),
 	},
 	{
-		label: i18n.__('contextMenu.selectAll'),
-		role: 'selectall',
+		label: t('contextMenu.selectAll'),
 		accelerator: 'CommandOrControl+A',
 		enabled: canSelectAll,
+		click: onClickSelectAll && onClickSelectAll.bind(null, webContents),
 	},
 ];
 
-export const createContextMenuTemplate = (params) => [
-	...createSpellCheckingMenuTemplate(params),
-	...createImageMenuTemplate(params),
-	...createLinkMenuTemplate(params),
-	...createDefaultMenuTemplate(params),
+const createContextMenuTemplate = (props) => [
+	...createSpellCheckingMenuTemplate(props),
+	...createImageMenuTemplate(props),
+	...createLinkMenuTemplate(props),
+	...createDefaultMenuTemplate(props),
 ];
+
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
+
+	const template = createContextMenuTemplate(props);
+	menu = Menu.buildFromTemplate(template);
+};
+
+const trigger = () => {
+	menu.popup({ window: getCurrentWindow() });
+};
+
+export default {
+	setProps,
+	trigger,
+};

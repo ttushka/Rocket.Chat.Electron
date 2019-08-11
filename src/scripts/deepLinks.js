@@ -3,6 +3,8 @@ import url from 'url';
 import { remote, ipcRenderer } from 'electron';
 
 
+const { app } = remote;
+
 const normalizeUrl = (hostUrl) => {
 	if (!/^https?:\/\//.test(hostUrl)) {
 		return `https://${ hostUrl }`;
@@ -41,16 +43,25 @@ export const processDeepLink = (link) => {
 	}
 };
 
-export const setupDeepLinks = () => {
-	remote.app.on('open-url', (event, url) => {
-		processDeepLink(url);
-	});
+const handleAppOpenURL = (event, url) => {
+	processDeepLink(url);
+};
 
-	remote.app.on('second-instance', (event, argv) => {
-		argv.slice(2).forEach(processDeepLink);
-	});
+const handleAppSecondInstance = (event, argv) => {
+	argv.slice(2).forEach(processDeepLink);
+};
+
+export const setupDeepLinks = () => {
+	app.addListener('open-url', handleAppOpenURL);
+	app.addListener('second-instance', handleAppSecondInstance);
+
+	window.addEventListener('beforeunload', () => {
+		app.removeListener('open-url', handleAppOpenURL);
+		app.removeListener('second-instance', handleAppSecondInstance);
+	}, false);
 
 	setImmediate(() => {
-		remote.process.argv.slice(2).forEach(processDeepLink);
+		const args = remote.process.argv.slice(2);
+		args.forEach(processDeepLink);
 	});
 };

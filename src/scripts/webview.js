@@ -2,9 +2,12 @@ import { ipcRenderer, remote } from 'electron';
 import { EventEmitter } from 'events';
 import servers from './servers';
 import screenshare from './dialogs/screenshare';
-import { spellCheckWords } from './spellChecking';
-import { createContextMenuTemplate } from './contextMenu';
+import { spellCheckWords, getSpellCheckingDictionaries, getEnabledSpellCheckingDictionaries, getSpellCheckingCorrections } from './spellChecking';
+import contextMenu from './contextMenu';
+import menus from './menus';
 
+
+const { getCurrentWebContents } = remote;
 
 class WebView extends EventEmitter {
 	constructor() {
@@ -98,11 +101,29 @@ class WebView extends EventEmitter {
 
 		webviewObj.addEventListener('context-menu', (event) => {
 			event.preventDefault();
-			const menu = remote.Menu.buildFromTemplate(createContextMenuTemplate({
-				webContents: webviewObj.getWebContents(),
+			const webContents = webviewObj.getWebContents();
+			contextMenu.setProps({
+				webContents,
 				...event.params,
-			}));
-			menu.popup({ window: remote.getCurrentWindow() });
+				spellCheckingCorrections: getSpellCheckingCorrections(event.params.selectionText),
+				spellCheckingDictionaries: getSpellCheckingDictionaries().map((name) => ({
+					name,
+					enabled: getEnabledSpellCheckingDictionaries().includes(name),
+				})),
+			});
+			contextMenu.trigger();
+		});
+
+		webviewObj.addEventListener('focus', () => {
+			menus.setProps({
+				webContents: webviewObj.getWebContents(),
+			});
+		});
+
+		webviewObj.addEventListener('blur', () => {
+			menus.setProps({
+				webContents: getCurrentWebContents(),
+			});
 		});
 
 		this.webviewParentElement.appendChild(webviewObj);
