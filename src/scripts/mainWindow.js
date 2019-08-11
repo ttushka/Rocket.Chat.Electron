@@ -1,6 +1,9 @@
 import { remote, ipcRenderer } from 'electron';
 import jetpack from 'fs-jetpack';
 
+
+const { app, getCurrentWebContents, getCurrentWindow } = remote;
+
 const focus = () => {
 	const mainWindow = remote.getCurrentWindow();
 
@@ -201,14 +204,20 @@ const attachWindowStateHandling = async (mainWindow) => {
 	mainWindow.on('set-state', setState);
 };
 
+const handleAppActivate = () => {
+	getCurrentWindow().show();
+};
+
 export const setupMainWindowStateHandling = () => {
+	app.addListener('activate', handleAppActivate);
+
+	window.addEventListener('beforeunload', () => {
+		app.removeListener('activate', handleAppActivate);
+	}, false);
+
 	attachWindowStateHandling(remote.getCurrentWindow());
 
-	remote.app.on('activate', async () => {
-		remote.getCurrentWindow().show();
-	});
-
 	if (process.env.NODE_ENV === 'development') {
-		remote.getCurrentWebContents().openDevTools();
+		getCurrentWebContents().openDevTools();
 	}
 };

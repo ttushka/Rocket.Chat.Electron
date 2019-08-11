@@ -154,9 +154,17 @@ const handleError = async (error) => {
 };
 
 export const setupUpdates = () => {
-	autoUpdater.on('checking-for-update', handleCheckingForUpdate);
-	autoUpdater.on('update-available', handleUpdateAvailable);
-	autoUpdater.on('update-not-available', handleUpdateNotAvailable);
-	autoUpdater.on('update-downloaded', handleUpdateDownloaded);
-	autoUpdater.on('error', handleError);
+	autoUpdater.addListener('checking-for-update', handleCheckingForUpdate);
+	autoUpdater.addListener('update-available', handleUpdateAvailable);
+	autoUpdater.addListener('update-not-available', handleUpdateNotAvailable);
+	autoUpdater.addListener('update-downloaded', handleUpdateDownloaded);
+	autoUpdater.addListener('error', handleError);
+
+	window.addEventListener('beforeunload', () => {
+		autoUpdater.removeListener('checking-for-update', handleCheckingForUpdate);
+		autoUpdater.removeListener('update-available', handleUpdateAvailable);
+		autoUpdater.removeListener('update-not-available', handleUpdateNotAvailable);
+		autoUpdater.removeListener('update-downloaded', handleUpdateDownloaded);
+		autoUpdater.removeListener('error', handleError);
+	}, false);
 };

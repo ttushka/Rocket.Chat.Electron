@@ -1,115 +1,133 @@
 import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
-import url from 'url';
+import { parse as parseURL } from 'url';
+import { reportError } from '../errorHandling';
 import i18n from '../i18n';
+import ipc from '../ipc';
+import { showMessageBox } from './dialogs';
 
 
-class CertificateStore {
-	async initialize() {
-		this.storeFileName = 'certificate.json';
-		this.userDataDir = jetpack.cwd(remote.app.getPath('userData'));
+const { app } = remote;
 
-		await this.load();
+const readUserDataFile = (path, returnAs = 'utf8') =>
+	jetpack.cwd(app.getPath('userData')).readAsync(path, returnAs);
 
-		// Don't ask twice for same cert if loading multiple urls
-		this.queued = {};
+const writeUserDataFile = (path, data) =>
+	jetpack.cwd(app.getPath('userData')).writeAsync(path, data, { atomic: true });
 
-		remote.app.on('certificate-error', (event, webContents, certificateUrl, error, certificate, callback) => {
-			if (this.isTrusted(certificateUrl, certificate)) {
-				callback(true);
-				return;
-			}
+const certificatesFileName = 'certificate.json';
+const certificateTrustRequests = {};
+let certificates = {};
 
-			if (this.queued[certificate.fingerprint]) {
-				this.queued[certificate.fingerprint].push(callback);
-				return;
-			} else {
-				this.queued[certificate.fingerprint] = [callback];
-			}
-
-			let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
-			if (this.isExisting(certificateUrl)) {
-				detail = i18n.__('error.differentCertificate', { detail });
-			}
-
-			remote.dialog.showMessageBox(remote.getCurrentWindow(), {
-				title: i18n.__('dialog.certificateError.title'),
-				message: i18n.__('dialog.certificateError.message', { issuerName: certificate.issuerName }),
-				detail,
-				type: 'warning',
-				buttons: [
-					i18n.__('dialog.certificateError.yes'),
-					i18n.__('dialog.certificateError.no'),
-				],
-				cancelId: 1,
-			}, async (response) => {
-				if (response === 0) {
-					this.add(certificateUrl, certificate);
-					await this.save();
-					if (webContents.getURL().indexOf('file://') === 0) {
-						webContents.send('certificate-reload', certificateUrl);
-					}
-				}
-
-				this.queued[certificate.fingerprint].forEach((cb) => cb(response === 0));
-				delete this.queued[certificate.fingerprint];
-			});
-		});
+const loadCertificates = async () => {
+	try {
+		certificates = await readUserDataFile(certificatesFileName, 'json') || {};
+	} catch (error) {
+		reportError(error);
+		certificates = {};
 	}
-
-	async load() {
-		try {
-			this.data = await this.userDataDir.readAsync(this.storeFileName, 'json');
-		} catch (e) {
-			console.error(e);
-			this.data = {};
-		}
-
-		if (this.data === undefined) {
-			await this.clear();
-		}
-	}
-
-	async clear() {
-		this.data = {};
-		await this.save();
-	}
-
-	async save() {
-		await this.userDataDir.writeAsync(this.storeFileName, this.data, { atomic: true });
-	}
-
-	parseCertificate(certificate) {
-		return `${ certificate.issuerName }\n${ certificate.data.toString() }`;
-	}
-
-	getHost(certificateUrl) {
-		return url.parse(certificateUrl).host;
-	}
-
-	add(certificateUrl, certificate) {
-		const host = this.getHost(certificateUrl);
-		this.data[host] = this.parseCertificate(certificate);
-	}
-
-	isExisting(certificateUrl) {
-		const host = this.getHost(certificateUrl);
-		return this.data.hasOwnProperty(host);
-	}
-
-	isTrusted(certificateUrl, certificate) {
-		const host = this.getHost(certificateUrl);
-		if (!this.isExisting(certificateUrl)) {
-			return false;
-		}
-		return this.data[host] === this.parseCertificate(certificate);
-	}
-}
-
-const instance = new CertificateStore();
-
-export const setupCertificates = () => {
-	instance.initialize();
 };
 
-export default instance;
+const persistCertificates = async () => {
+	try {
+		await writeUserDataFile(certificatesFileName, certificates);
+	} catch (error) {
+		reportError(error);
+	}
+};
+
+export const clearCertificates = async () => {
+	certificates = {};
+	await persistCertificates();
+};
+
+const serializeCertificate = ({ issuerName, data }) => `${ issuerName }\n${ data.toString() }`;
+
+export const addTrustedCertificate = (certificateUrl, certificate) => {
+	const { host } = parseURL(certificateUrl);
+	certificates[host] = serializeCertificate(certificate);
+	persistCertificates();
+};
+
+const hasTrustedCertificateFor = (certificateUrl) => {
+	const { host } = parseURL(certificateUrl);
+	return certificates.hasOwnProperty(host);
+};
+
+const isCertificateTrusted = (certificateUrl, certificate) => {
+	const { host } = parseURL(certificateUrl);
+	if (!hasTrustedCertificateFor(certificateUrl)) {
+		return false;
+	}
+
+	return certificates[host] === serializeCertificate(certificate);
+};
+
+const handleAppCertificateError = (event, webContents, certificateUrl, error, certificate, callback) => {
+	if (isCertificateTrusted(certificateUrl, certificate)) {
+		callback(true);
+		return;
+	}
+
+	const { fingerprint } = certificate;
+
+	if (certificateTrustRequests[fingerprint]) {
+		certificateTrustRequests[fingerprint].push(callback);
+		return;
+	}
+
+	certificateTrustRequests[fingerprint] = [callback];
+	const isReplacing = hasTrustedCertificateFor(certificateUrl);
+
+	ipc.emit('certificates/request-trust', webContents.id, certificateUrl, error, certificate, isReplacing);
+};
+
+const handleCertificateTrustRequest = async (webContentsId, certificateUrl, error, certificate, isReplacing) => {
+	const { fingerprint, issuerName } = certificate || {};
+
+	const title = i18n.__('dialog.certificateError.title');
+	const message = i18n.__('dialog.certificateError.message', {
+		issuerName,
+	});
+	let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
+	if (isReplacing) {
+		detail = i18n.__('error.differentCertificate', { detail });
+	}
+
+	const { response } = await showMessageBox({
+		title,
+		message,
+		detail,
+		type: 'warning',
+		buttons: [
+			i18n.__('dialog.certificateError.yes'),
+			i18n.__('dialog.certificateError.no'),
+		],
+		cancelId: 1,
+	});
+
+	const isTrusted = response === 0;
+
+	if (isTrusted) {
+		addTrustedCertificate(certificateUrl, certificate);
+
+		ipc.emit('certificates/added', webContentsId, certificateUrl, error, certificate, isReplacing);
+	}
+
+	for (const callback of certificateTrustRequests[fingerprint] || []) {
+		callback(response === 0);
+	}
+	delete certificateTrustRequests[fingerprint];
+};
+
+export const setupCertificates = () => {
+	loadCertificates();
+
+	ipc.connect('certificates/request-trust', handleCertificateTrustRequest);
+
+	app.addListener('certificate-error', handleAppCertificateError);
+
+	window.addEventListener('beforeunload', () => {
+		app.removeListener('certificate-error', handleAppCertificateError);
+	}, false);
+};

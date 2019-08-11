@@ -8,11 +8,6 @@ import menus from './menus';
 import tray from './tray';
 import about from './dialogs/about';
 import update from './dialogs/update';
-import certificates, { setupCertificates } from './certificates';
-import { setupBasicAuthentication } from './basicAuth';
-import { setupDeepLinks } from './deepLinks';
-import { setupUpdates } from './updates';
-import { setupSpellChecking } from './spellChecking';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -104,7 +99,7 @@ export default () => {
 
 	menus.on('reload-server', ({ ignoringCache = false, clearCertificates = false } = {}) => {
 		if (clearCertificates) {
-			certificates.clear();
+			clearCertificates();
 		}
 
 		const activeWebview = webview.getActive();
@@ -305,11 +300,6 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
-	setupBasicAuthentication();
-	setupCertificates();
-	setupDeepLinks();
-	setupUpdates();
-	setupSpellChecking();
 
 	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

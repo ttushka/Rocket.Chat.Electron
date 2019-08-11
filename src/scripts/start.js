@@ -1,4 +1,4 @@
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, remote } from 'electron';
 import attachEvents from './events';
 import servers from './servers';
 import i18n from '../i18n';
@@ -94,9 +94,11 @@ async function setupLanding() {
 		validateHost().then(function() {}, function() {});
 	});
 
-	ipcRenderer.on('certificate-reload', (event, url) => {
+	ipcRenderer.on('certificates/added', (event, webContentsId, certificateUrl, error, certificate, isReplacing) => {
+		const webContents = remote.webContents.fromId(webContentsId);
+		const url = webContents.getURL();
 		hostField.value = url.replace(/\/api\/info$/, '');
-		validateHost().then(function() {}, function() {});
+		validateHost();
 	});
 
 	form.addEventListener('submit', (event) => {
