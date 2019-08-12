@@ -21,6 +21,7 @@ import updateModal from './updateModal';
 import { skipUpdateVersion, downloadUpdate, canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates, quitAndInstallUpdate } from './updates';
 import ipc from '../ipc';
 import screenSharingModal from './screenSharingModal';
+import landingView from './landingView';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -30,15 +31,15 @@ const updatePreferences = () => {
 	const showWindowOnUnreadChanged = localStorage.getItem('showWindowOnUnreadChanged') === 'true';
 	const hasTrayIcon = localStorage.getItem('hideTray') ?
 		localStorage.getItem('hideTray') !== 'true' : (process.platform !== 'linux');
-	const hasMenuBar = localStorage.getItem('autohideMenu') !== 'true';
-	const hasSidebar = localStorage.getItem('sidebar-closed') !== 'true';
+	const isMenuBarVisible = localStorage.getItem('autohideMenu') !== 'true';
+	const isSideBarVisible = localStorage.getItem('sidebar-closed') !== 'true';
 
 	menus.setProps({
-		showTrayIcon: hasTrayIcon,
-		showFullScreen: mainWindow.isFullScreen(),
+		hasTrayIcon,
+		isFullScreen: mainWindow.isFullScreen(),
+		isMenuBarVisible,
+		isSideBarVisible,
 		showWindowOnUnreadChanged,
-		showMenuBar: hasMenuBar,
-		showServerList: hasSidebar,
 	});
 
 	tray.setState({
@@ -50,10 +51,10 @@ const updatePreferences = () => {
 	});
 
 	sidebar.setState({
-		visible: hasSidebar,
+		visible: isSideBarVisible,
 	});
 
-	webview.setSidebarPaddingEnabled(!hasSidebar);
+	webview.setSidebarPaddingEnabled(!isSideBarVisible);
 };
 
 
@@ -235,6 +236,8 @@ export default () => {
 		quitAndInstallUpdate();
 	});
 
+	landingView.setProps({});
+
 	menus.setProps({
 		appName: app.getName(),
 		webContents: remote.getCurrentWebContents(),
@@ -294,7 +297,7 @@ export default () => {
 		onClickGoForward: (webContents) => {
 			webContents.goForward();
 		},
-		onClickToggleShowTrayIcon: (isEnabled) => {
+		onClickToggleTrayIcon: (isEnabled) => {
 			localStorage.setItem('hideTray', JSON.stringify(!isEnabled));
 			updatePreferences();
 		},

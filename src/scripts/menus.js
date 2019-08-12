@@ -114,17 +114,17 @@ const createEditMenuTemplate = ({
 
 const createViewMenuTemplate = ({
 	webContents,
-	showTrayIcon = true,
-	showFullScreen = false,
-	showMenuBar = true,
-	showServerList = true,
+	hasTrayIcon = true,
+	isFullScreen = false,
+	isMenuBarVisible = true,
+	isSideBarVisible = true,
 	onClickReload,
 	onClickReloadIgnoringCache,
 	onClickClearCertificates,
 	onClickOpenDevToolsForServer,
 	onClickGoBack,
 	onClickGoForward,
-	onClickToggleShowTrayIcon,
+	onClickToggleTrayIcon,
 	onClickToggleFullScreen,
 	onClickToggleMenuBar,
 	onClickToggleSideBar,
@@ -171,14 +171,14 @@ const createViewMenuTemplate = ({
 		{
 			label: t('menus.showTrayIcon'),
 			type: 'checkbox',
-			checked: showTrayIcon,
-			click: onClickToggleShowTrayIcon && (({ checked }) => onClickToggleShowTrayIcon(checked)),
+			checked: hasTrayIcon,
+			click: onClickToggleTrayIcon && (({ checked }) => onClickToggleTrayIcon(checked)),
 		},
 		...(process.platform === 'darwin' ? [
 			{
 				label: t('menus.showFullScreen'),
 				type: 'checkbox',
-				checked: showFullScreen,
+				checked: isFullScreen,
 				accelerator: 'Control+Command+F',
 				click: onClickToggleFullScreen && (({ checked }) => onClickToggleFullScreen(checked)),
 			},
@@ -186,14 +186,14 @@ const createViewMenuTemplate = ({
 			{
 				label: t('menus.showMenuBar'),
 				type: 'checkbox',
-				checked: showMenuBar,
+				checked: isMenuBarVisible,
 				click: onClickToggleMenuBar && (({ checked }) => onClickToggleMenuBar(checked)),
 			},
 		]),
 		{
 			label: t('menus.showServerList'),
 			type: 'checkbox',
-			checked: showServerList,
+			checked: isSideBarVisible,
 			click: onClickToggleSideBar && (({ checked }) => onClickToggleSideBar(checked)),
 		},
 		{
@@ -346,10 +346,10 @@ const setProps = (partialProps) => {
 	Menu.setApplicationMenu(menu);
 
 	if (process.platform !== 'darwin') {
-		const { showMenuBar } = props;
+		const { isMenuBarVisible = false } = props;
 		const mainWindow = getCurrentWindow();
-		mainWindow.setAutoHideMenuBar(!showMenuBar);
-		mainWindow.setMenuBarVisibility(!!showMenuBar);
+		mainWindow.setAutoHideMenuBar(!isMenuBarVisible);
+		mainWindow.setMenuBarVisibility(isMenuBarVisible);
 	}
 };
 

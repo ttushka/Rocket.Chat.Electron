@@ -299,3 +299,17 @@ export const getServers = () => {
 		.sort(({ url: a }, { url: b }) => sorting.indexOf(a) - sorting.indexOf(b))
 		.map(({ title, url }) => ({ title, url }));
 };
+
+export const addServer = (serverURL) => {
+	const resolvedServerURL = instance.addHost(serverURL);
+
+	if (!resolvedServerURL) {
+		return;
+	}
+
+	instance.setActive(resolvedServerURL);
+
+	return resolvedServerURL;
+};
+
+export const validateServerURL = (serverURL) => instance.validateHost(serverURL, 2000);
