@@ -1,4 +1,4 @@
-import { remote, ipcRenderer, clipboard } from 'electron';
+import { remote, clipboard } from 'electron';
 import { t } from 'i18next';
 import servers, { getServers } from './servers';
 import sidebar from './sidebar';
@@ -7,10 +7,9 @@ import setTouchBar from './touchBar';
 import dock from './dock';
 import menus from './menus';
 import tray from './tray';
-import about from './dialogs/about';
-import update from './dialogs/update';
-import { reportError } from '../errorHandling';
-import { showErrorBox, showOpenDialog } from './dialogs';
+import aboutModal from './aboutModal';
+import { reportError, reportWarning } from '../errorHandling';
+import { showErrorBox, showOpenDialog, showMessageBox } from './dialogs';
 import {
 	installSpellCheckingDictionaries,
 	getSpellCheckingDictionariesPath,
@@ -18,6 +17,9 @@ import {
 } from './spellChecking';
 import contextMenu from './contextMenu';
 import { clearCertificates } from './certificates';
+import updateModal from './updateModal';
+import { skipUpdateVersion, downloadUpdate, canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates, quitAndInstallUpdate } from './updates';
+import ipc from '../ipc';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -92,11 +94,151 @@ export default () => {
 		webview.focusActive();
 	});
 
+	aboutModal.setProps({
+		canUpdate: canUpdate(),
+		canAutoUpdate: canAutoUpdate(),
+		canSetAutoUpdate: canSetAutoUpdate(),
+		currentVersion: app.getVersion(),
+		onDismiss: () => {
+			aboutModal.setProps({ visible: false });
+		},
+		onClickCheckForUpdates: () => {
+			checkForUpdates();
+		},
+		onToggleCheckForUpdatesOnStart: (isEnabled) => {
+			setAutoUpdate(isEnabled);
+		},
+	});
+
+	contextMenu.setProps({
+		onClickReplaceMispelling: (webContents, correction) => {
+			webContents.replaceMisspelling(correction);
+		},
+		onClickToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
+			setSpellCheckingDictionaryEnabled(name, isEnabled);
+		},
+		onClickBrowseForSpellCheckLanguage: async () => {
+			const { filePaths } = await showOpenDialog({
+				title: t('dialog.loadDictionary.title'),
+				defaultPath: getSpellCheckingDictionariesPath(),
+				filters: [
+					{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
+					{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
+				],
+				properties: ['openFile', 'multiSelections'],
+			});
+
+			try {
+				await installSpellCheckingDictionaries(filePaths);
+			} catch (error) {
+				reportError(error);
+				showErrorBox(
+					t('dialog.loadDictionaryError.title'),
+					t('dialog.loadDictionaryError.message', { message: error.message })
+				);
+			}
+		},
+		onClickSaveImageAs: (webContents, url) => {
+			webContents.downloadURL(url);
+		},
+		onClickOpenLink: (webContents, url) => {
+			shell.openExternal(url);
+		},
+		onClickCopyLinkText: (webContents, url, text) => {
+			clipboard.write({ text, bookmark: text });
+		},
+		onClickCopyLinkAddress: (webContents, url, text) => {
+			clipboard.write({ text: url, bookmark: text });
+		},
+		onClickUndo: (webContents) => {
+			webContents.undo();
+		},
+		onClickRedo: (webContents) => {
+			webContents.redo();
+		},
+		onClickCut: (webContents) => {
+			webContents.cut();
+		},
+		onClickCopy: (webContents) => {
+			webContents.copy();
+		},
+		onClickPaste: (webContents) => {
+			webContents.paste();
+		},
+		onClickSelectAll: (webContents) => {
+			webContents.selectAll();
+		},
+	});
+
+	ipc.connect('updates/checking', () => {
+		aboutModal.setProps({ isCheckingForUpdate: true });
+		updateModal.setProps({ isCheckingForUpdate: true });
+	});
+
+	ipc.connect('updates/update-available', (newVersion) => {
+		const props = {
+			visible: false,
+			newVersion,
+			isCheckingForUpdate: false,
+		};
+		aboutModal.setProps(props);
+		updateModal.setProps(props);
+	});
+
+	ipc.connect('updates/update-not-available', () => {
+		const props = {
+			newVersion: undefined,
+			isCheckingForUpdate: false,
+			updateMessage: t('dialog.about.noUpdatesAvailable'),
+		};
+		aboutModal.setProps(props);
+		updateModal.setProps(props);
+	});
+
+	ipc.connect('updates/error', (error) => {
+		const props = {
+			newVersion: undefined,
+			isCheckingForUpdate: false,
+			updateMessage: t('dialog.about.errorWhileLookingForUpdates'),
+		};
+		aboutModal.setProps(props);
+		updateModal.setProps(props);
+		reportWarning(error);
+	});
+
+	ipc.connect('updates/update-downloaded', async () => {
+		const { response } = await showMessageBox({
+			type: 'question',
+			title: t('dialog.updateReady.title'),
+			message: t('dialog.updateReady.message'),
+			buttons: [
+				t('dialog.updateReady.installLater'),
+				t('dialog.updateReady.installNow'),
+			],
+			defaultId: 1,
+		});
+
+		if (response === 0) {
+			await showMessageBox({
+				type: 'info',
+				title: t('dialog.updateInstallLater.title'),
+				message: t('dialog.updateInstallLater.message'),
+				buttons: [t('dialog.updateInstallLater.ok')],
+				defaultId: 0,
+			});
+			return;
+		}
+
+		getCurrentWindow().removeAllListeners();
+		app.removeAllListeners('window-all-closed');
+		quitAndInstallUpdate();
+	});
+
 	menus.setProps({
 		appName: app.getName(),
 		webContents: remote.getCurrentWebContents(),
 		onClickShowAbout: () => {
-			about.open();
+			aboutModal.setProps({ visible: true });
 		},
 		onClickQuit: () => {
 			app.quit();
@@ -266,6 +408,37 @@ export default () => {
 		(visible ? getCurrentWindow().show() : getCurrentWindow().hide()));
 	tray.on('quit', () => app.quit());
 
+	updateModal.setProps({
+		currentVersion: app.getVersion(),
+		onDismiss: () => {
+			updateModal.setProps({ visible: false });
+		},
+		onSkipUpdateVersion: async (version) => {
+			await showMessageBox({
+				type: 'warning',
+				title: t('dialog.updateSkip.title'),
+				message: t('dialog.updateSkip.message'),
+				buttons: [t('dialog.updateSkip.ok')],
+				defaultId: 0,
+			});
+			skipUpdateVersion(version);
+			updateModal.setProps({ visible: false });
+		},
+		onRemindUpdateLater: () => {
+			updateModal.setProps({ visible: false });
+		},
+		onInstallUpdate: async () => {
+			await showMessageBox({
+				type: 'info',
+				title: t('dialog.updateDownloading.title'),
+				message: t('dialog.updateDownloading.message'),
+				buttons: [t('dialog.updateDownloading.ok')],
+				defaultId: 0,
+			});
+			downloadUpdate();
+			updateModal.setProps({ visible: false });
+		},
+	});
 
 	webview.on('ipc-message-unread-changed', (hostUrl, [badge]) => {
 		if (typeof badge === 'number' && localStorage.getItem('showWindowOnUnreadChanged') === 'true') {
@@ -320,66 +493,6 @@ export default () => {
 		webview.setSidebarPaddingEnabled(!hasSidebar);
 	});
 
-	contextMenu.setProps({
-		onClickReplaceMispelling: (webContents, correction) => {
-			webContents.replaceMisspelling(correction);
-		},
-		onClickToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
-			setSpellCheckingDictionaryEnabled(name, isEnabled);
-		},
-		onClickBrowseForSpellCheckLanguage: async () => {
-			const { filePaths } = await showOpenDialog({
-				title: t('dialog.loadDictionary.title'),
-				defaultPath: getSpellCheckingDictionariesPath(),
-				filters: [
-					{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
-					{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
-				],
-				properties: ['openFile', 'multiSelections'],
-			});
-
-			try {
-				await installSpellCheckingDictionaries(filePaths);
-			} catch (error) {
-				reportError(error);
-				showErrorBox(
-					t('dialog.loadDictionaryError.title'),
-					t('dialog.loadDictionaryError.message', { message: error.message })
-				);
-			}
-		},
-		onClickSaveImageAs: (webContents, url) => {
-			webContents.downloadURL(url);
-		},
-		onClickOpenLink: (webContents, url) => {
-			shell.openExternal(url);
-		},
-		onClickCopyLinkText: (webContents, url, text) => {
-			clipboard.write({ text, bookmark: text });
-		},
-		onClickCopyLinkAddress: (webContents, url, text) => {
-			clipboard.write({ text: url, bookmark: text });
-		},
-		onClickUndo: (webContents) => {
-			webContents.undo();
-		},
-		onClickRedo: (webContents) => {
-			webContents.redo();
-		},
-		onClickCut: (webContents) => {
-			webContents.cut();
-		},
-		onClickCopy: (webContents) => {
-			webContents.copy();
-		},
-		onClickPaste: (webContents) => {
-			webContents.paste();
-		},
-		onClickSelectAll: (webContents) => {
-			webContents.selectAll();
-		},
-	});
-
 	if (process.platform === 'darwin') {
 		setTouchBar();
 	}
@@ -389,6 +502,4 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
-
-	ipcRenderer.on('open-update-dialog', (e, ...args) => update.open(...args));
 };

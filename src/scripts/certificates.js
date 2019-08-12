@@ -1,19 +1,13 @@
 import { remote } from 'electron';
-import jetpack from 'fs-jetpack';
 import { t } from 'i18next';
 import { parse as parseURL } from 'url';
 import { reportError } from '../errorHandling';
 import ipc from '../ipc';
 import { showMessageBox } from './dialogs';
+import { readUserDataFile, writeUserDataFile } from './userData';
 
 
 const { app } = remote;
-
-const readUserDataFile = (path, returnAs = 'utf8') =>
-	jetpack.cwd(app.getPath('userData')).readAsync(path, returnAs);
-
-const writeUserDataFile = (path, data) =>
-	jetpack.cwd(app.getPath('userData')).writeAsync(path, data, { atomic: true });
 
 const certificatesFileName = 'certificate.json';
 const certificateTrustRequests = {};

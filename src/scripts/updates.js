@@ -1,45 +1,50 @@
-import { remote, ipcRenderer } from 'electron';
-import jetpack from 'fs-jetpack';
-import i18n from '../i18n';
-import update from './dialogs/update';
+import { remote } from 'electron';
+import ipc from '../ipc';
+import { reportError } from '../errorHandling';
+import { readAppDataFile, readUserDataFile, writeUserDataFile } from './userData';
 
 
 const { autoUpdater } = remote.require('electron-updater');
 
-const appDir = jetpack.cwd(remote.app.getAppPath(), remote.app.getAppPath().endsWith('app.asar') ? '..' : '.');
-const userDataDir = jetpack.cwd(remote.app.getPath('userData'));
 const updateSettingsFileName = 'update.json';
+let appUpdateSettings = {};
+let userUpdateSettings = {};
+let updateSettings = {};
 
-const loadUpdateSettings = (dir) => {
+const loadUpdateSettings = async () => {
 	try {
-		return dir.read(updateSettingsFileName, 'json') || {};
+		appUpdateSettings = await readAppDataFile(updateSettingsFileName, 'json') || {};
 	} catch (error) {
-		console.error(error);
-		return {};
+		reportError(error);
+		appUpdateSettings = {};
 	}
+
+	try {
+		userUpdateSettings = await readUserDataFile(updateSettingsFileName, 'json') || {};
+	} catch (error) {
+		reportError(error);
+		userUpdateSettings = {};
+	}
+
+	updateSettings = (() => {
+		const defaultUpdateSettings = { autoUpdate: true, canUpdate: true };
+
+		if (appUpdateSettings.forced) {
+			return Object.assign({}, defaultUpdateSettings, appUpdateSettings);
+		} else {
+			return Object.assign({}, defaultUpdateSettings, appUpdateSettings, userUpdateSettings);
+		}
+	})();
+	delete updateSettings.forced;
 };
 
-const appUpdateSettings = loadUpdateSettings(appDir);
-const userUpdateSettings = loadUpdateSettings(userDataDir);
-const updateSettings = (() => {
-	const defaultUpdateSettings = { autoUpdate: true, canUpdate: true };
-
-	if (appUpdateSettings.forced) {
-		return Object.assign({}, defaultUpdateSettings, appUpdateSettings);
-	} else {
-		return Object.assign({}, defaultUpdateSettings, appUpdateSettings, userUpdateSettings);
-	}
-})();
-delete updateSettings.forced;
-
-const saveUpdateSettings = () => {
+const persistUpdateSettings = async () => {
 	if (appUpdateSettings.forced) {
 		return;
 	}
 
-	userDataDir.write(updateSettingsFileName, userUpdateSettings, { atomic: true });
+	await writeUserDataFile(updateSettingsFileName, userUpdateSettings);
 };
-
 
 export const canUpdate = () => updateSettings.canUpdate &&
 (
@@ -58,85 +63,41 @@ export const setAutoUpdate = (canAutoUpdate) => {
 	}
 
 	updateSettings.autoUpdate = userUpdateSettings.autoUpdate = Boolean(canAutoUpdate);
-	saveUpdateSettings();
+	persistUpdateSettings();
 };
 
 export const skipUpdateVersion = (version) => {
 	userUpdateSettings.skip = version;
-	saveUpdateSettings();
+	persistUpdateSettings();
 };
 
 export const downloadUpdate = async () => {
 	try {
 		await autoUpdater.downloadUpdate();
-	} catch (e) {
-		autoUpdater.emit('error', e);
+	} catch (error) {
+		autoUpdater.emit('error', error);
 	}
 };
 
-let checkingForUpdates = false;
+let isCheckingForUpdates = false;
 
-export const checkForUpdates = async ({ forced = false } = {}) => {
-	if (checkingForUpdates) {
+export const checkForUpdates = async () => {
+	if (isCheckingForUpdates) {
 		return;
 	}
 
-	if ((forced || canAutoUpdate()) && canUpdate()) {
-		checkingForUpdates = true;
-		try {
-			await autoUpdater.checkForUpdates();
-		} catch (error) {
-			autoUpdater.emit('error', error);
-		}
-	}
-};
-
-const handleCheckingForUpdate = () => {
-};
-
-const handleUpdateAvailable = async ({ version }) => {
-	if (checkingForUpdates) {
-		ipcRenderer.emit('update-result', null, true);
-		checkingForUpdates = false;
-	} else if (updateSettings.skip === version) {
+	if (!canUpdate()) {
 		return;
 	}
 
-	update.open({ newVersion: version });
-};
-
-const handleUpdateNotAvailable = () => {
-	if (checkingForUpdates) {
-		ipcRenderer.emit('update-result', null, false);
-		checkingForUpdates = false;
+	try {
+		await autoUpdater.checkForUpdates();
+	} catch (error) {
+		autoUpdater.emit('error', error);
 	}
 };
 
-const handleUpdateDownloaded = async () => {
-	const response = remote.dialog.showMessageBox(remote.getCurrentWindow(), {
-		type: 'question',
-		title: i18n.__('dialog.updateReady.title'),
-		message: i18n.__('dialog.updateReady.message'),
-		buttons: [
-			i18n.__('dialog.updateReady.installLater'),
-			i18n.__('dialog.updateReady.installNow'),
-		],
-		defaultId: 1,
-	});
-
-	if (response === 0) {
-		remote.dialog.showMessageBox(remote.getCurrentWindow(), {
-			type: 'info',
-			title: i18n.__('dialog.updateInstallLater.title'),
-			message: i18n.__('dialog.updateInstallLater.message'),
-			buttons: [i18n.__('dialog.updateInstallLater.ok')],
-			defaultId: 0,
-		});
-		return;
-	}
-
-	remote.getCurrentWindow().removeAllListeners();
-	remote.app.removeAllListeners('window-all-closed');
+export const quitAndInstallUpdate = () => {
 	try {
 		autoUpdater.quitAndInstall();
 	} catch (error) {
@@ -144,16 +105,46 @@ const handleUpdateDownloaded = async () => {
 	}
 };
 
-const handleError = async (error) => {
-	ipcRenderer.emit('update-error', null, error);
+const handleCheckingForUpdate = () => {
+	isCheckingForUpdates = true;
+	ipc.emit('updates/checking');
+};
 
-	if (checkingForUpdates) {
-		ipcRenderer.emit('update-result', null, false);
-		checkingForUpdates = false;
+const handleUpdateAvailable = async ({ version }) => {
+	if (updateSettings.skip === version) {
+		ipc.emit('updates/update-not-available');
+		return;
 	}
+
+	if (!isCheckingForUpdates) {
+		return;
+	}
+
+	ipc.emit('updates/update-available', version);
+	isCheckingForUpdates = false;
+};
+
+const handleUpdateNotAvailable = () => {
+	if (!isCheckingForUpdates) {
+		return;
+	}
+
+	ipc.emit('updates/update-not-available');
+	isCheckingForUpdates = false;
+};
+
+const handleUpdateDownloaded = () => {
+	ipc.emit('updates/update-downloaded');
+};
+
+const handleError = (error) => {
+	ipc.emit('updates/error', error);
+	isCheckingForUpdates = false;
 };
 
 export const setupUpdates = () => {
+	loadUpdateSettings();
+
 	autoUpdater.addListener('checking-for-update', handleCheckingForUpdate);
 	autoUpdater.addListener('update-available', handleUpdateAvailable);
 	autoUpdater.addListener('update-not-available', handleUpdateNotAvailable);
@@ -167,4 +158,8 @@ export const setupUpdates = () => {
 		autoUpdater.removeListener('update-downloaded', handleUpdateDownloaded);
 		autoUpdater.removeListener('error', handleError);
 	}, false);
+
+	if (canAutoUpdate()) {
+		checkForUpdates();
+	}
 };
