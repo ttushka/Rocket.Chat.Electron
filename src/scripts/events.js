@@ -1,7 +1,7 @@
 import { remote, clipboard } from 'electron';
 import { t } from 'i18next';
-import servers, { getServers } from './servers';
-import sidebar from './sidebar';
+import servers, { getServers, getActiveServerURL } from './servers';
+import sideBar from './sideBar';
 import webview from './webview';
 import setTouchBar from './touchBar';
 import dock from './dock';
@@ -18,10 +18,20 @@ import {
 import contextMenu from './contextMenu';
 import { clearCertificates, setCertificateTrustRequestHandler } from './certificates';
 import updateModal from './updateModal';
-import { skipUpdateVersion, downloadUpdate, canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates, quitAndInstallUpdate } from './updates';
+import {
+	skipUpdateVersion,
+	downloadUpdate,
+	canUpdate,
+	canAutoUpdate,
+	canSetAutoUpdate,
+	setAutoUpdate,
+	checkForUpdates,
+	quitAndInstallUpdate,
+} from './updates';
 import ipc from '../ipc';
 import screenSharingModal from './screenSharingModal';
 import landingView from './landingView';
+import { requestAppDataReset } from './userData';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -50,7 +60,7 @@ const updatePreferences = () => {
 		hasTrayIcon,
 	});
 
-	sidebar.setState({
+	sideBar.setProps({
 		visible: isSideBarVisible,
 	});
 
@@ -59,17 +69,14 @@ const updatePreferences = () => {
 
 
 const updateServers = () => {
-	const sorting = JSON.parse(localStorage.getItem('rocket.chat.sortOrder')) || [];
-
 	menus.setProps({
 		servers: getServers(),
-		currentServerUrl: servers.active,
+		activeServerURL: getActiveServerURL(),
 	});
 
-	sidebar.setState({
-		hosts: servers.hosts,
-		sorting,
-		active: servers.active,
+	sideBar.setProps({
+		servers: getServers(),
+		activeServerURL: getActiveServerURL(),
 	});
 };
 
@@ -341,8 +348,25 @@ export default () => {
 		onClickOpenURL: (url) => {
 			shell.openExternal(url);
 		},
-		onClickResetAppData: () => {
-			servers.resetAppData();
+		onClickResetAppData: async () => {
+			const { response } = await showMessageBox({
+				type: 'question',
+				buttons: [
+					t('dialog.resetAppData.yes'),
+					t('dialog.resetAppData.cancel'),
+				],
+				defaultId: 1,
+				title: t('dialog.resetAppData.title'),
+				message: t('dialog.resetAppData.message'),
+			});
+
+			const mustResetAppData = response === 0;
+
+			if (!mustResetAppData) {
+				return;
+			}
+
+			requestAppDataReset();
 		},
 	});
 
@@ -394,30 +418,27 @@ export default () => {
 		updateServers();
 	});
 
-	sidebar.on('select-server', (hostUrl) => {
-		servers.setActive(hostUrl);
-	});
-
-	sidebar.on('reload-server', (hostUrl) => {
-		webview.getByUrl(hostUrl).reload();
-	});
-
-	sidebar.on('remove-server', (hostUrl) => {
-		servers.removeHost(hostUrl);
-	});
-
-	sidebar.on('open-devtools-for-server', (hostUrl) => {
-		webview.getByUrl(hostUrl).openDevTools();
-	});
-
-	sidebar.on('add-server', () => {
-		servers.clearActive();
-		webview.showLanding();
-	});
-
-	sidebar.on('servers-sorted', (sorting) => {
-		localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(sorting));
-		updateServers();
+	sideBar.setProps({
+		onClickAddServer: () => {
+			servers.clearActive();
+			webview.showLanding();
+		},
+		onClickServer: (serverURL) => {
+			servers.setActive(serverURL);
+		},
+		onClickReloadServer: (serverURL) => {
+			webview.getByUrl(serverURL).reload();
+		},
+		onClickRemoveServer: (serverURL) => {
+			servers.removeHost(serverURL);
+		},
+		onClickOpenDevToolsForServer: (serverURL) => {
+			webview.getByUrl(serverURL).openDevTools();
+		},
+		onSortServers: (sorting) => {
+			localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(sorting));
+			updateServers();
+		},
 	});
 
 	getCurrentWindow().on('hide', updateWindowState);
@@ -461,6 +482,8 @@ export default () => {
 		},
 	});
 
+	let badges = {};
+
 	webview.on('ipc-message-unread-changed', (hostUrl, [badge]) => {
 		if (typeof badge === 'number' && localStorage.getItem('showWindowOnUnreadChanged') === 'true') {
 			const mainWindow = remote.getCurrentWindow();
@@ -471,19 +494,19 @@ export default () => {
 			}
 		}
 
-		sidebar.setState({
-			badges: {
-				...sidebar.state.badges,
-				[hostUrl]: badge || null,
-			},
-		});
+		badges = {
+			...badges,
+			[hostUrl]: badge || null,
+		};
 
-		const mentionCount = Object.values(sidebar.state.badges)
+		sideBar.setProps({ badges });
+
+		const mentionCount = Object.values(badges)
 			.filter((badge) => Number.isInteger(badge))
 			.reduce((sum, count) => sum + count, 0);
-		const globalBadge = mentionCount ||
-			(Object.values(sidebar.state.badges).some((badge) => !!badge) && '•') ||
-			null;
+		const globalBadge = mentionCount
+			|| (Object.values(badges).some((badge) => !!badge) && '•')
+			|| null;
 
 		tray.setState({ badge: globalBadge });
 		dock.setState({ badge: globalBadge });
@@ -497,18 +520,19 @@ export default () => {
 		servers.setActive(hostUrl);
 	});
 
+	let styles = {};
+
 	webview.on('ipc-message-sidebar-style', (hostUrl, [style]) => {
-		sidebar.setState({
-			styles: {
-				...sidebar.state.styles,
-				[hostUrl]: style || null,
-			},
-		});
+		styles = {
+			...styles,
+			[hostUrl]: style || null,
+		};
+		sideBar.setProps({ styles });
 	});
 
 	webview.on('dom-ready', () => {
 		const hasSidebar = localStorage.getItem('sidebar-closed') !== 'true';
-		sidebar.setState({
+		sideBar.setProps({
 			visible: hasSidebar,
 		});
 		webview.setSidebarPaddingEnabled(!hasSidebar);
@@ -519,7 +543,6 @@ export default () => {
 	}
 
 	servers.restoreActive();
-	sidebar.mount();
 	updatePreferences();
 	updateServers();
 	updateWindowState();

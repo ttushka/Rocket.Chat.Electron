@@ -270,22 +270,6 @@ class Servers extends EventEmitter {
 			}
 		});
 	}
-
-	resetAppData() {
-		const response = remote.dialog.showMessageBox({
-			type: 'question',
-			buttons: [i18n.__('dialog.resetAppData.yes'), i18n.__('dialog.resetAppData.cancel')],
-			defaultId: 1,
-			title: i18n.__('dialog.resetAppData.title'),
-			message: i18n.__('dialog.resetAppData.message'),
-		});
-
-		if (response !== 0) {
-			return;
-		}
-
-		ipcRenderer.send('reset-app-data');
-	}
 }
 
 const instance = new Servers();
@@ -299,6 +283,8 @@ export const getServers = () => {
 		.sort(({ url: a }, { url: b }) => sorting.indexOf(a) - sorting.indexOf(b))
 		.map(({ title, url }) => ({ title, url }));
 };
+
+export const getActiveServerURL = () => instance.active;
 
 export const addServer = (serverURL) => {
 	const resolvedServerURL = instance.addHost(serverURL);

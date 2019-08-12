@@ -1,5 +1,6 @@
 import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
+import ipc from '../ipc';
 
 
 const { app } = remote;
@@ -15,3 +16,7 @@ export const readAppDataFile = (path, returnAs = 'utf8') =>
 export const writeUserDataFile = (path, data) =>
 	jetpack.cwd(app.getPath('userData'))
 		.writeAsync(path, data, { atomic: true });
+
+export const requestAppDataReset = () => {
+	ipc.emit('reset-app-data');
+};

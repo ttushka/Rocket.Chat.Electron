@@ -219,7 +219,7 @@ const createViewMenuTemplate = ({
 
 const createWindowMenuTemplate = ({
 	servers = [],
-	currentServerUrl = null,
+	activeServerURL = null,
 	showWindowOnUnreadChanged = false,
 	onClickAddNewServer,
 	onClickSelectServer,
@@ -243,8 +243,8 @@ const createWindowMenuTemplate = ({
 		] : []),
 		...servers.map((server, i) => ({
 			label: server.title.replace(/&/g, '&&'),
-			type: currentServerUrl ? 'radio' : 'normal',
-			checked: currentServerUrl === server.url,
+			type: activeServerURL ? 'radio' : 'normal',
+			checked: activeServerURL === server.url,
 			accelerator: `CommandOrControl+${ i + 1 }`,
 			id: server.url,
 			click: onClickSelectServer && onClickSelectServer.bind(null, server),
