@@ -1,7 +1,13 @@
 import { remote } from 'electron';
-import { EventEmitter } from 'events';
 import { getTrayIconImage, getAppIconImage } from './icon';
 
+
+const { app, getCurrentWindow } = remote;
+
+let props = {
+	hasTrayIcon: false,
+	badge: null,
+};
 
 const getBadgeText = ({ badge }) => {
 	if (badge === '•') {
@@ -15,52 +21,44 @@ const getBadgeText = ({ badge }) => {
 	return '';
 };
 
-let state = {
-	badge: null,
-	hasTrayIcon: false,
-};
+const setProps = (partialProps) => {
+	const prevProps = props;
+	props = {
+		...props,
+		...partialProps,
+	};
 
-const instance = new (class Dock extends EventEmitter {});
+	const {
+		hasTrayIcon,
+		badge,
+	} = props;
 
-const destroy = () => {
-	instance.removeAllListeners();
-};
-
-const update = (previousState) => {
-	const mainWindow = remote.getCurrentWindow();
+	const {
+		badge: previousBadge,
+	} = prevProps;
 
 	if (process.platform === 'darwin') {
-		remote.app.dock.setBadge(getBadgeText(state));
-		const count = Number.isInteger(state.badge) ? state.badge : 0;
-		const previousCount = Number.isInteger(previousState.badge) ? state.badge : 0;
+		app.dock.setBadge(getBadgeText(props));
+		const count = Number.isInteger(badge) ? badge : 0;
+		const previousCount = Number.isInteger(previousBadge) ? previousBadge : 0;
 		if (count > 0 && previousCount === 0) {
-			remote.app.dock.bounce();
+			app.dock.bounce();
 		}
 	}
 
+	const mainWindow = getCurrentWindow();
+
 	if (process.platform === 'linux' || process.platform === 'win32') {
-		const image = state.hasTrayIcon ? getAppIconImage() : getTrayIconImage({ badge: state.badge });
+		const image = hasTrayIcon ? getAppIconImage() : getTrayIconImage({ badge });
 		mainWindow.setIcon(image);
 	}
 
 	if (!mainWindow.isFocused()) {
-		const count = Number.isInteger(state.badge) ? state.badge : 0;
+		const count = Number.isInteger(badge) ? badge : 0;
 		mainWindow.flashFrame(count > 0);
 	}
-
-	instance.emit('update');
 };
 
-const setState = (partialState) => {
-	const previousState = state;
-	state = {
-		...state,
-		...partialState,
-	};
-	update(previousState);
+export default {
+	setProps,
 };
-
-export default Object.assign(instance, {
-	destroy,
-	setState,
-});

@@ -13,7 +13,7 @@ const createSpellCheckingMenuTemplate = ({
 	spellCheckingCorrections,
 	spellCheckingDictionaries,
 	onClickReplaceMispelling,
-	onClickToggleSpellCheckingDictionary,
+	onToggleSpellCheckingDictionary,
 	onClickBrowseForSpellCheckLanguage,
 }) => {
 	if (!isEditable) {
@@ -56,7 +56,7 @@ const createSpellCheckingMenuTemplate = ({
 					label: name,
 					type: 'checkbox',
 					checked: enabled,
-					click: onClickToggleSpellCheckingDictionary && (({ checked }) => onClickToggleSpellCheckingDictionary(webContents, name, checked)),
+					click: onToggleSpellCheckingDictionary && (({ checked }) => onToggleSpellCheckingDictionary(webContents, name, checked)),
 				})),
 				{
 					type: 'separator',

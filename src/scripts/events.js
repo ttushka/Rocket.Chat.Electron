@@ -1,22 +1,24 @@
 import { remote, clipboard } from 'electron';
 import { t } from 'i18next';
+import { reportError, reportWarning } from '../errorHandling';
+import ipc from '../ipc';
+import aboutModal from './aboutModal';
+import { clearCertificates, setCertificateTrustRequestHandler } from './certificates';
+import contextMenu from './contextMenu';
+import { showErrorBox, showOpenDialog, showMessageBox } from './dialogs';
+import dock from './dock';
+import landingView from './landingView';
+import menus from './menus';
+import screenSharingModal from './screenSharingModal';
 import servers, { getServers, getActiveServerURL } from './servers';
 import sideBar from './sideBar';
-import webview from './webview';
-import setTouchBar from './touchBar';
-import dock from './dock';
-import menus from './menus';
-import tray from './tray';
-import aboutModal from './aboutModal';
-import { reportError, reportWarning } from '../errorHandling';
-import { showErrorBox, showOpenDialog, showMessageBox } from './dialogs';
 import {
 	installSpellCheckingDictionaries,
 	getSpellCheckingDictionariesPath,
 	setSpellCheckingDictionaryEnabled,
 } from './spellChecking';
-import contextMenu from './contextMenu';
-import { clearCertificates, setCertificateTrustRequestHandler } from './certificates';
+import setTouchBar from './touchBar';
+import trayIcon from './trayIcon';
 import updateModal from './updateModal';
 import {
 	skipUpdateVersion,
@@ -28,21 +30,23 @@ import {
 	checkForUpdates,
 	quitAndInstallUpdate,
 } from './updates';
-import ipc from '../ipc';
-import screenSharingModal from './screenSharingModal';
-import landingView from './landingView';
 import { requestAppDataReset } from './userData';
+import webview from './webview';
+import mainWindow from './mainWindow';
 
 
 const { app, getCurrentWindow, shell } = remote;
 
 const updatePreferences = () => {
-	const mainWindow = getCurrentWindow();
 	const showWindowOnUnreadChanged = localStorage.getItem('showWindowOnUnreadChanged') === 'true';
 	const hasTrayIcon = localStorage.getItem('hideTray') ?
 		localStorage.getItem('hideTray') !== 'true' : (process.platform !== 'linux');
 	const isMenuBarVisible = localStorage.getItem('autohideMenu') !== 'true';
 	const isSideBarVisible = localStorage.getItem('sidebar-closed') !== 'true';
+
+	mainWindow.setProps({
+		hasTrayIcon,
+	});
 
 	menus.setProps({
 		hasTrayIcon,
@@ -52,11 +56,11 @@ const updatePreferences = () => {
 		showWindowOnUnreadChanged,
 	});
 
-	tray.setState({
-		showIcon: hasTrayIcon,
+	trayIcon.setProps({
+		visible: hasTrayIcon,
 	});
 
-	dock.setState({
+	dock.setProps({
 		hasTrayIcon,
 	});
 
@@ -81,13 +85,10 @@ const updateServers = () => {
 };
 
 
-const updateWindowState = () => tray.setState({ isMainWindowVisible: getCurrentWindow().isVisible() });
+const updateWindowState = () => trayIcon.setProps({ isMainWindowVisible: getCurrentWindow().isVisible() });
 
 const destroyAll = () => {
 	try {
-		menus.removeAllListeners();
-		tray.destroy();
-		dock.destroy();
 		const mainWindow = getCurrentWindow();
 		mainWindow.removeListener('hide', updateWindowState);
 		mainWindow.removeListener('show', updateWindowState);
@@ -102,6 +103,9 @@ export default () => {
 	window.addEventListener('focus', () => {
 		webview.focusActive();
 	});
+
+	getCurrentWindow().on('hide', updateWindowState);
+	getCurrentWindow().on('show', updateWindowState);
 
 	aboutModal.setProps({
 		canUpdate: canUpdate(),
@@ -123,7 +127,7 @@ export default () => {
 		onClickReplaceMispelling: (webContents, correction) => {
 			webContents.replaceMisspelling(correction);
 		},
-		onClickToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
+		onToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
 			setSpellCheckingDictionaryEnabled(name, isEnabled);
 		},
 		onClickBrowseForSpellCheckLanguage: async () => {
@@ -304,19 +308,19 @@ export default () => {
 		onClickGoForward: (webContents) => {
 			webContents.goForward();
 		},
-		onClickToggleTrayIcon: (isEnabled) => {
+		onToggleTrayIcon: (isEnabled) => {
 			localStorage.setItem('hideTray', JSON.stringify(!isEnabled));
 			updatePreferences();
 		},
-		onClickToggleFullScreen: (isEnabled) => {
+		onToggleFullScreen: (isEnabled) => {
 			getCurrentWindow().setFullScreen(isEnabled);
 			updatePreferences();
 		},
-		onClickToggleMenuBar: (isEnabled) => {
+		onToggleMenuBar: (isEnabled) => {
 			localStorage.setItem('autohideMenu', JSON.stringify(!isEnabled));
 			updatePreferences();
 		},
-		onClickToggleSideBar: (isEnabled) => {
+		onToggleSideBar: (isEnabled) => {
 			localStorage.setItem('sidebar-closed', JSON.stringify(!isEnabled));
 			updatePreferences();
 		},
@@ -338,10 +342,10 @@ export default () => {
 		onClickReloadApp: () => {
 			remote.getCurrentWebContents().reloadIgnoringCache();
 		},
-		onClickToggleAppDevTools: () => {
+		onToggleAppDevTools: () => {
 			remote.getCurrentWebContents().toggleDevTools();
 		},
-		onClickToggleShowWindowOnUnreadChanged: (isEnabled) => {
+		onToggleShowWindowOnUnreadChanged: (isEnabled) => {
 			localStorage.setItem('showWindowOnUnreadChanged', JSON.stringify(isEnabled));
 			updatePreferences();
 		},
@@ -441,14 +445,20 @@ export default () => {
 		},
 	});
 
-	getCurrentWindow().on('hide', updateWindowState);
-	getCurrentWindow().on('show', updateWindowState);
+	trayIcon.setProps({
+		appName: app.getName(),
+		onToggleMainWindow: (isVisible) => {
+			if (isVisible) {
+				getCurrentWindow().show();
+				return;
+			}
 
-	tray.on('created', () => getCurrentWindow().emit('set-state', { hideOnClose: true }));
-	tray.on('destroyed', () => getCurrentWindow().emit('set-state', { hideOnClose: false }));
-	tray.on('set-main-window-visibility', (visible) =>
-		(visible ? getCurrentWindow().show() : getCurrentWindow().hide()));
-	tray.on('quit', () => app.quit());
+			getCurrentWindow().hide();
+		},
+		onClickQuit: () => {
+			app.quit();
+		},
+	});
 
 	updateModal.setProps({
 		currentVersion: app.getVersion(),
@@ -484,7 +494,7 @@ export default () => {
 
 	let badges = {};
 
-	webview.on('ipc-message-unread-changed', (hostUrl, [badge]) => {
+	webview.on('ipc-message-unread-changed', (serverURL, [badge]) => {
 		if (typeof badge === 'number' && localStorage.getItem('showWindowOnUnreadChanged') === 'true') {
 			const mainWindow = remote.getCurrentWindow();
 			if (!mainWindow.isFocused()) {
@@ -496,7 +506,7 @@ export default () => {
 
 		badges = {
 			...badges,
-			[hostUrl]: badge || null,
+			[serverURL]: badge || null,
 		};
 
 		sideBar.setProps({ badges });
@@ -508,8 +518,8 @@ export default () => {
 			|| (Object.values(badges).some((badge) => !!badge) && '•')
 			|| null;
 
-		tray.setState({ badge: globalBadge });
-		dock.setState({ badge: globalBadge });
+		trayIcon.setProps({ badge: globalBadge });
+		dock.setProps({ badge: globalBadge });
 	});
 
 	webview.on('ipc-message-title-changed', (hostUrl, [title]) => {

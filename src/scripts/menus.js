@@ -124,10 +124,10 @@ const createViewMenuTemplate = ({
 	onClickOpenDevToolsForServer,
 	onClickGoBack,
 	onClickGoForward,
-	onClickToggleTrayIcon,
-	onClickToggleFullScreen,
-	onClickToggleMenuBar,
-	onClickToggleSideBar,
+	onToggleTrayIcon,
+	onToggleFullScreen,
+	onToggleMenuBar,
+	onToggleSideBar,
 	onClickResetZoom,
 	onClickZoomIn,
 	onClickZoomOut,
@@ -172,7 +172,7 @@ const createViewMenuTemplate = ({
 			label: t('menus.showTrayIcon'),
 			type: 'checkbox',
 			checked: hasTrayIcon,
-			click: onClickToggleTrayIcon && (({ checked }) => onClickToggleTrayIcon(checked)),
+			click: onToggleTrayIcon && (({ checked }) => onToggleTrayIcon(checked)),
 		},
 		...(process.platform === 'darwin' ? [
 			{
@@ -180,21 +180,21 @@ const createViewMenuTemplate = ({
 				type: 'checkbox',
 				checked: isFullScreen,
 				accelerator: 'Control+Command+F',
-				click: onClickToggleFullScreen && (({ checked }) => onClickToggleFullScreen(checked)),
+				click: onToggleFullScreen && (({ checked }) => onToggleFullScreen(checked)),
 			},
 		] : [
 			{
 				label: t('menus.showMenuBar'),
 				type: 'checkbox',
 				checked: isMenuBarVisible,
-				click: onClickToggleMenuBar && (({ checked }) => onClickToggleMenuBar(checked)),
+				click: onToggleMenuBar && (({ checked }) => onToggleMenuBar(checked)),
 			},
 		]),
 		{
 			label: t('menus.showServerList'),
 			type: 'checkbox',
 			checked: isSideBarVisible,
-			click: onClickToggleSideBar && (({ checked }) => onClickToggleSideBar(checked)),
+			click: onToggleSideBar && (({ checked }) => onToggleSideBar(checked)),
 		},
 		{
 			type: 'separator',
@@ -224,8 +224,8 @@ const createWindowMenuTemplate = ({
 	onClickAddNewServer,
 	onClickSelectServer,
 	onClickReloadApp,
-	onClickToggleAppDevTools,
-	onClickToggleShowWindowOnUnreadChanged,
+	onToggleAppDevTools,
+	onToggleShowWindowOnUnreadChanged,
 }) => ({
 	label: t('menus.windowMenu'),
 	id: 'window',
@@ -259,7 +259,7 @@ const createWindowMenuTemplate = ({
 		},
 		{
 			label: t('menus.toggleDevTools'),
-			click: onClickToggleAppDevTools && onClickToggleAppDevTools.bind(null),
+			click: onToggleAppDevTools && onToggleAppDevTools.bind(null),
 		},
 		{
 			type: 'separator',
@@ -268,7 +268,7 @@ const createWindowMenuTemplate = ({
 			label: t('menus.showOnUnreadMessage'),
 			type: 'checkbox',
 			checked: showWindowOnUnreadChanged,
-			click: onClickToggleShowWindowOnUnreadChanged && (({ checked }) => onClickToggleShowWindowOnUnreadChanged(checked)),
+			click: onToggleShowWindowOnUnreadChanged && (({ checked }) => onToggleShowWindowOnUnreadChanged(checked)),
 		},
 		{
 			type: 'separator',

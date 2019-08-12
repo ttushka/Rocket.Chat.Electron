@@ -146,15 +146,8 @@ class WindowStateHandler {
 	}
 }
 
-let state = {
-	hideOnClose: false,
-};
-
-const setState = (partialState) => {
-	state = {
-		...state,
-		...partialState,
-	};
+let props = {
+	hasTrayIcon: false,
 };
 
 const attachWindowStateHandling = async (mainWindow) => {
@@ -174,7 +167,7 @@ const attachWindowStateHandling = async (mainWindow) => {
 	const close = () => {
 		mainWindow.blur();
 
-		if (process.platform === 'darwin' || state.hideOnClose) {
+		if (process.platform === 'darwin' || props.hasTrayIcon) {
 			mainWindow.hide();
 			return;
 		}
@@ -200,8 +193,6 @@ const attachWindowStateHandling = async (mainWindow) => {
 		close();
 		windowStateHandler.fetchAndSave();
 	});
-
-	mainWindow.on('set-state', setState);
 };
 
 const handleAppActivate = () => {
@@ -221,3 +212,14 @@ export const setupMainWindowStateHandling = () => {
 		getCurrentWebContents().openDevTools();
 	}
 };
+
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
+};
+
+export default Object.assign(getCurrentWindow(), {
+	setProps,
+});

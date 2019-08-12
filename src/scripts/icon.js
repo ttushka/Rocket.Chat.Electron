@@ -57,7 +57,7 @@ export function getTrayIconPath({ badge, platform, dark } = {}) {
 }
 
 export function getAppIconImage() {
-	return nativeImage.createFromPath(`${ __dirname }/${ getAppIconPath() }`);
+	return nativeImage.createFromPath(getPathFromApp(getAppIconPath()));
 }
 
 export function getTrayIconImage({ badge, platform, dark } = {}) {
