@@ -3,6 +3,8 @@ import { copyright } from '../../package.json';
 
 
 let props = {
+	visible: false,
+	currentVersion: undefined,
 	canUpdate: false,
 	canAutoUpdate: false,
 	canSetAutoUpdate: false,

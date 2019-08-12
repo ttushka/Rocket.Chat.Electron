@@ -1,7 +1,7 @@
 import { ipcRenderer, remote } from 'electron';
 import { EventEmitter } from 'events';
 import servers from './servers';
-import screenshare from './dialogs/screenshare';
+import screenSharingModal from './screenSharingModal';
 import { spellCheckWords, getSpellCheckingDictionaries, getEnabledSpellCheckingDictionaries, getSpellCheckingCorrections } from './spellChecking';
 import contextMenu from './contextMenu';
 import menus from './menus';
@@ -61,9 +61,13 @@ class WebView extends EventEmitter {
 			this.emit(`ipc-message-${ event.channel }`, host.url, event.args);
 
 			switch (event.channel) {
-				case 'get-sourceId':
-					screenshare.open();
+				case 'get-sourceId': {
+					screenSharingModal.setProps({
+						visible: true,
+					});
 					break;
+				}
+
 				case 'reload-server': {
 					const webviewObj = this.getByUrl(host.url);
 					const server = webviewObj.getAttribute('server');

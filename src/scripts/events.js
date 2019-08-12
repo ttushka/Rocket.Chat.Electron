@@ -20,6 +20,7 @@ import { clearCertificates, setCertificateTrustRequestHandler } from './certific
 import updateModal from './updateModal';
 import { skipUpdateVersion, downloadUpdate, canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates, quitAndInstallUpdate } from './updates';
 import ipc from '../ipc';
+import screenSharingModal from './screenSharingModal';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -339,6 +340,23 @@ export default () => {
 		},
 		onClickResetAppData: () => {
 			servers.resetAppData();
+		},
+	});
+
+	screenSharingModal.setProps({
+		onDismiss: () => {
+			screenSharingModal.setProps({
+				visible: false,
+			});
+
+			ipc.emit('screenshare-result', 'PermissionDeniedError');
+		},
+		onSelectScreenSharingSource: (id) => {
+			screenSharingModal.setProps({
+				visible: false,
+			});
+
+			ipc.emit('screenshare-result', id);
 		},
 	});
 
