@@ -16,7 +16,7 @@ import {
 	setSpellCheckingDictionaryEnabled,
 } from './spellChecking';
 import contextMenu from './contextMenu';
-import { clearCertificates } from './certificates';
+import { clearCertificates, setCertificateTrustRequestHandler } from './certificates';
 import updateModal from './updateModal';
 import { skipUpdateVersion, downloadUpdate, canUpdate, canAutoUpdate, canSetAutoUpdate, setAutoUpdate, checkForUpdates, quitAndInstallUpdate } from './updates';
 import ipc from '../ipc';
@@ -502,4 +502,31 @@ export default () => {
 	updatePreferences();
 	updateServers();
 	updateWindowState();
+
+	setCertificateTrustRequestHandler(async (webContents, certificateUrl, error, certificate, isReplacing) => {
+		const { issuerName } = certificate || {};
+
+		const title = t('dialog.certificateError.title');
+		const message = t('dialog.certificateError.message', {
+			issuerName,
+		});
+		let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
+		if (isReplacing) {
+			detail = t('error.differentCertificate', { detail });
+		}
+
+		const { response } = await showMessageBox({
+			title,
+			message,
+			detail,
+			type: 'warning',
+			buttons: [
+				t('dialog.certificateError.yes'),
+				t('dialog.certificateError.no'),
+			],
+			cancelId: 1,
+		});
+
+		return response === 0;
+	});
 };

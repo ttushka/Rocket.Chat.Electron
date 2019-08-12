@@ -1,6 +1,7 @@
+import { remote } from 'electron';
 import querystring from 'querystring';
 import url from 'url';
-import { remote, ipcRenderer } from 'electron';
+import ipc from '../ipc';
 
 
 const { app } = remote;
@@ -15,13 +16,13 @@ const normalizeUrl = (hostUrl) => {
 
 const processAuth = ({ host, token, userId }) => {
 	const hostUrl = normalizeUrl(host);
-	ipcRenderer.emit('add-host', null, hostUrl, { token, userId });
+	ipc.emit('add-host', hostUrl, { token, userId });
 };
 
 const processRoom = async ({ host, rid, path }) => {
 	const hostUrl = normalizeUrl(host);
-	ipcRenderer.emit('add-host', null, hostUrl);
-	ipcRenderer.emit('open-room', null, hostUrl, { rid, path });
+	ipc.emit('add-host', hostUrl);
+	ipc.emit('open-room', hostUrl, { rid, path });
 };
 
 export const processDeepLink = (link) => {

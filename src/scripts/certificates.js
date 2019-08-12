@@ -1,9 +1,7 @@
 import { remote } from 'electron';
-import { t } from 'i18next';
 import { parse as parseURL } from 'url';
 import { reportError } from '../errorHandling';
 import ipc from '../ipc';
-import { showMessageBox } from './dialogs';
 import { readUserDataFile, writeUserDataFile } from './userData';
 
 
@@ -41,6 +39,7 @@ export const addTrustedCertificate = (certificateUrl, certificate) => {
 	const { host } = parseURL(certificateUrl);
 	certificates[host] = serializeCertificate(certificate);
 	persistCertificates();
+	ipc.emit('certificates/added', certificateUrl, certificate);
 };
 
 const hasTrustedCertificateFor = (certificateUrl) => {
@@ -57,7 +56,9 @@ const isCertificateTrusted = (certificateUrl, certificate) => {
 	return certificates[host] === serializeCertificate(certificate);
 };
 
-const handleAppCertificateError = (event, webContents, certificateUrl, error, certificate, callback) => {
+let certificateTrustRequestHandler;
+
+const handleAppCertificateError = async (event, webContents, certificateUrl, error, certificate, callback) => {
 	if (isCertificateTrusted(certificateUrl, certificate)) {
 		callback(true);
 		return;
@@ -73,43 +74,16 @@ const handleAppCertificateError = (event, webContents, certificateUrl, error, ce
 	certificateTrustRequests[fingerprint] = [callback];
 	const isReplacing = hasTrustedCertificateFor(certificateUrl);
 
-	ipc.emit('certificates/request-trust', webContents.id, certificateUrl, error, certificate, isReplacing);
-};
-
-const handleCertificateTrustRequest = async (webContentsId, certificateUrl, error, certificate, isReplacing) => {
-	const { fingerprint, issuerName } = certificate || {};
-
-	const title = t('dialog.certificateError.title');
-	const message = t('dialog.certificateError.message', {
-		issuerName,
-	});
-	let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
-	if (isReplacing) {
-		detail = t('error.differentCertificate', { detail });
-	}
-
-	const { response } = await showMessageBox({
-		title,
-		message,
-		detail,
-		type: 'warning',
-		buttons: [
-			t('dialog.certificateError.yes'),
-			t('dialog.certificateError.no'),
-		],
-		cancelId: 1,
-	});
-
-	const isTrusted = response === 0;
+	const isTrusted = certificateTrustRequestHandler
+		? await certificateTrustRequestHandler(webContents, certificateUrl, error, certificate, isReplacing)
+		: false;
 
 	if (isTrusted) {
 		addTrustedCertificate(certificateUrl, certificate);
-
-		ipc.emit('certificates/added', webContentsId, certificateUrl, error, certificate, isReplacing);
 	}
 
 	for (const callback of certificateTrustRequests[fingerprint] || []) {
-		callback(response === 0);
+		callback(isTrusted);
 	}
 	delete certificateTrustRequests[fingerprint];
 };
@@ -117,11 +91,13 @@ const handleCertificateTrustRequest = async (webContentsId, certificateUrl, erro
 export const setupCertificates = () => {
 	loadCertificates();
 
-	ipc.connect('certificates/request-trust', handleCertificateTrustRequest);
-
 	app.addListener('certificate-error', handleAppCertificateError);
 
 	window.addEventListener('beforeunload', () => {
 		app.removeListener('certificate-error', handleAppCertificateError);
 	}, false);
+};
+
+export const setCertificateTrustRequestHandler = (handler) => {
+	certificateTrustRequestHandler = handler;
 };
