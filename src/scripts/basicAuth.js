@@ -15,10 +15,25 @@ const handleLogin = (event, webContents, request, authInfo, callback) => {
 	callback(null, null);
 };
 
-export const setupBasicAuthentication = () => {
+const setupBasicAuthentication = () => {
 	app.addListener('login', handleLogin);
 
 	window.addEventListener('beforeunload', () => {
 		app.removeListener('login', handleLogin);
 	}, false);
+};
+
+let mounted = false;
+
+const setProps = () => {
+	if (mounted) {
+		return;
+	}
+
+	setupBasicAuthentication();
+	mounted = true;
+};
+
+export default {
+	setProps,
 };

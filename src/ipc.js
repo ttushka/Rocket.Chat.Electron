@@ -37,7 +37,32 @@ const connect = (endpoint, listener) => {
 	return disconnect;
 };
 
+const request = (endpoint, ...args) => {
+	const reqId = Math.random().toString(16).slice(2);
+
+	const promise = new Promise((resolve) => {
+		const disconnect = connect(`${ endpoint }/response`, (resId, ...args) => {
+			if (resId !== reqId) {
+				return;
+			}
+
+			disconnect();
+			resolve(args);
+		});
+	});
+
+	emit(endpoint, reqId, ...args);
+
+	return promise;
+};
+
+const reply = (endpoint, reqId, ...args) => {
+	emit(`${ endpoint }/response`, reqId, ...args);
+};
+
 export default {
 	emit,
 	connect,
+	request,
+	reply,
 };

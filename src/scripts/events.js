@@ -3,24 +3,24 @@ import { t } from 'i18next';
 import { reportError, reportWarning } from '../errorHandling';
 import ipc from '../ipc';
 import aboutModal from './aboutModal';
-import { clearCertificates, setCertificateTrustRequestHandler } from './certificates';
+import certificates from './certificates';
 import contextMenu from './contextMenu';
 import { showErrorBox, showOpenDialog, showMessageBox } from './dialogs';
 import dock from './dock';
 import landingView from './landingView';
 import menus from './menus';
 import screenSharingModal from './screenSharingModal';
-import servers, { getServers, getActiveServerURL } from './servers';
+import servers, { getServers, getActiveServerURL, sortServers, validateServerURL } from './servers';
 import sideBar from './sideBar';
-import {
+import spellChecking, {
 	installSpellCheckingDictionaries,
 	getSpellCheckingDictionariesPath,
 	setSpellCheckingDictionaryEnabled,
 } from './spellChecking';
-import setTouchBar from './touchBar';
+import touchBar from './touchBar';
 import trayIcon from './trayIcon';
 import updateModal from './updateModal';
-import {
+import updates, {
 	skipUpdateVersion,
 	downloadUpdate,
 	canUpdate,
@@ -33,6 +33,8 @@ import {
 import { requestAppDataReset } from './userData';
 import webview from './webview';
 import mainWindow from './mainWindow';
+import basicAuth from './basicAuth';
+import deepLinks from './deepLinks';
 
 
 const { app, getCurrentWindow, shell } = remote;
@@ -82,6 +84,11 @@ const updateServers = () => {
 		servers: getServers(),
 		activeServerURL: getActiveServerURL(),
 	});
+
+	touchBar.setProps({
+		servers: getServers(),
+		activeServerURL: getActiveServerURL(),
+	});
 };
 
 
@@ -120,6 +127,37 @@ export default () => {
 		},
 		onToggleCheckForUpdatesOnStart: (isEnabled) => {
 			setAutoUpdate(isEnabled);
+		},
+	});
+
+	basicAuth.setProps({});
+
+	certificates.setProps({
+		certificateTrustRequestHandler: async (webContents, certificateUrl, error, certificate, isReplacing) => {
+			const { issuerName } = certificate || {};
+
+			const title = t('dialog.certificateError.title');
+			const message = t('dialog.certificateError.message', {
+				issuerName,
+			});
+			let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
+			if (isReplacing) {
+				detail = t('error.differentCertificate', { detail });
+			}
+
+			const { response } = await showMessageBox({
+				title,
+				message,
+				detail,
+				type: 'warning',
+				buttons: [
+					t('dialog.certificateError.yes'),
+					t('dialog.certificateError.no'),
+				],
+				cancelId: 1,
+			});
+
+			return response === 0;
 		},
 	});
 
@@ -183,68 +221,37 @@ export default () => {
 		},
 	});
 
-	ipc.connect('updates/checking', () => {
-		aboutModal.setProps({ isCheckingForUpdate: true });
-		updateModal.setProps({ isCheckingForUpdate: true });
-	});
+	deepLinks.setProps({
+		onAddHost: async (serverURL) => {
+			ipc.emit('focus');
+			if (servers.hostExists(serverURL)) {
+				servers.setActive(serverURL);
+				return;
+			}
 
-	ipc.connect('updates/update-available', (newVersion) => {
-		const props = {
-			visible: false,
-			newVersion,
-			isCheckingForUpdate: false,
-		};
-		aboutModal.setProps(props);
-		updateModal.setProps(props);
-	});
-
-	ipc.connect('updates/update-not-available', () => {
-		const props = {
-			newVersion: undefined,
-			isCheckingForUpdate: false,
-			updateMessage: t('dialog.about.noUpdatesAvailable'),
-		};
-		aboutModal.setProps(props);
-		updateModal.setProps(props);
-	});
-
-	ipc.connect('updates/error', (error) => {
-		const props = {
-			newVersion: undefined,
-			isCheckingForUpdate: false,
-			updateMessage: t('dialog.about.errorWhileLookingForUpdates'),
-		};
-		aboutModal.setProps(props);
-		updateModal.setProps(props);
-		reportWarning(error);
-	});
-
-	ipc.connect('updates/update-downloaded', async () => {
-		const { response } = await showMessageBox({
-			type: 'question',
-			title: t('dialog.updateReady.title'),
-			message: t('dialog.updateReady.message'),
-			buttons: [
-				t('dialog.updateReady.installLater'),
-				t('dialog.updateReady.installNow'),
-			],
-			defaultId: 1,
-		});
-
-		if (response === 0) {
-			await showMessageBox({
-				type: 'info',
-				title: t('dialog.updateInstallLater.title'),
-				message: t('dialog.updateInstallLater.message'),
-				buttons: [t('dialog.updateInstallLater.ok')],
+			const { response } = await showMessageBox({
+				type: 'question',
+				buttons: [t('dialog.addServer.add'), t('dialog.addServer.cancel')],
 				defaultId: 0,
+				title: t('dialog.addServer.title'),
+				message: t('dialog.addServer.message', { host: serverURL }),
 			});
-			return;
-		}
 
-		getCurrentWindow().removeAllListeners();
-		app.removeAllListeners('window-all-closed');
-		quitAndInstallUpdate();
+			if (response !== 0) {
+				return;
+			}
+
+			try {
+				await validateServerURL(serverURL);
+				servers.addHost(serverURL);
+				servers.setActive(serverURL);
+			} catch (error) {
+				showErrorBox(t('dialog.addServerError.title'), t('dialog.addServerError.message', { host: serverURL }));
+			}
+		},
+		onOpenRoom: (...args) => {
+			ipc.emit('open-room', ...args);
+		},
 	});
 
 	landingView.setProps({});
@@ -294,7 +301,7 @@ export default () => {
 			webContents.reloadIgnoringCache();
 		},
 		onClickClearCertificates: () => {
-			clearCertificates();
+			certificates.clear();
 		},
 		onClickOpenDevToolsForServer: (webContents) => {
 			if (webContents === remote.getCurrentWebContents()) {
@@ -391,35 +398,32 @@ export default () => {
 		},
 	});
 
-	servers.on('loaded', () => {
-		webview.loaded();
-		updateServers();
-	});
-
-	servers.on('host-added', (hostUrl) => {
-		webview.add(servers.get(hostUrl));
-		updateServers();
-	});
-
-	servers.on('host-removed', (hostUrl) => {
-		webview.remove(hostUrl);
-		servers.clearActive();
-		webview.showLanding();
-		updateServers();
-	});
-
-	servers.on('active-setted', (hostUrl) => {
-		webview.setActive(hostUrl);
-		updateServers();
-	});
-
-	servers.on('active-cleared', (hostUrl) => {
-		webview.deactiveAll(hostUrl);
-		updateServers();
-	});
-
-	servers.on('title-setted', () => {
-		updateServers();
+	servers.setProps({
+		onServersLoaded: () => {
+			webview.loaded();
+			updateServers();
+		},
+		onServerAdded: (serverURL) => {
+			webview.add(servers.get(serverURL));
+			updateServers();
+		},
+		onServerRemoved: (serverURL) => {
+			webview.remove(serverURL);
+			servers.clearActive();
+			webview.showLanding();
+			updateServers();
+		},
+		onActiveSetted: (serverURL) => {
+			webview.setActive(serverURL);
+			updateServers();
+		},
+		onActiveCleared: () => {
+			webview.deactiveAll();
+			updateServers();
+		},
+		onTitleSetted: () => {
+			updateServers();
+		},
 	});
 
 	sideBar.setProps({
@@ -439,9 +443,24 @@ export default () => {
 		onClickOpenDevToolsForServer: (serverURL) => {
 			webview.getByUrl(serverURL).openDevTools();
 		},
-		onSortServers: (sorting) => {
-			localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(sorting));
+		onSortServers: (serverURLs) => {
+			sortServers(serverURLs);
 			updateServers();
+		},
+	});
+
+	spellChecking.setProps({});
+
+	touchBar.setProps({
+		onTouchFormattingButton: (buttonClass) => {
+			webview.getActive().executeJavaScript(`
+				var svg = document.querySelector("button svg[class$='${ buttonClass }']");
+				svg && svg.parentNode.click();
+				`.trim()
+			);
+		},
+		onTouchServer: (serverURL) => {
+			servers.setActive(serverURL);
 		},
 	});
 
@@ -489,6 +508,68 @@ export default () => {
 			});
 			downloadUpdate();
 			updateModal.setProps({ visible: false });
+		},
+	});
+
+	updates.setProps({
+		onCheckingForUpdates: () => {
+			aboutModal.setProps({ isCheckingForUpdate: true });
+			updateModal.setProps({ isCheckingForUpdate: true });
+		},
+		onUpdateNotAvailable: () => {
+			const props = {
+				newVersion: undefined,
+				isCheckingForUpdate: false,
+				updateMessage: t('dialog.about.noUpdatesAvailable'),
+			};
+			aboutModal.setProps(props);
+			updateModal.setProps(props);
+		},
+		onUpdateAvailable: (newVersion) => {
+			const props = {
+				visible: false,
+				newVersion,
+				isCheckingForUpdate: false,
+			};
+			aboutModal.setProps(props);
+			updateModal.setProps(props);
+		},
+		onUpdateDownloaded: async () => {
+			const { response } = await showMessageBox({
+				type: 'question',
+				title: t('dialog.updateReady.title'),
+				message: t('dialog.updateReady.message'),
+				buttons: [
+					t('dialog.updateReady.installLater'),
+					t('dialog.updateReady.installNow'),
+				],
+				defaultId: 1,
+			});
+
+			if (response === 0) {
+				await showMessageBox({
+					type: 'info',
+					title: t('dialog.updateInstallLater.title'),
+					message: t('dialog.updateInstallLater.message'),
+					buttons: [t('dialog.updateInstallLater.ok')],
+					defaultId: 0,
+				});
+				return;
+			}
+
+			getCurrentWindow().removeAllListeners();
+			app.removeAllListeners('window-all-closed');
+			quitAndInstallUpdate();
+		},
+		onError: (error) => {
+			const props = {
+				newVersion: undefined,
+				isCheckingForUpdate: false,
+				updateMessage: t('dialog.about.errorWhileLookingForUpdates'),
+			};
+			aboutModal.setProps(props);
+			updateModal.setProps(props);
+			reportWarning(error);
 		},
 	});
 
@@ -548,39 +629,9 @@ export default () => {
 		webview.setSidebarPaddingEnabled(!hasSidebar);
 	});
 
-	if (process.platform === 'darwin') {
-		setTouchBar();
-	}
+	webview.setProps({});
 
-	servers.restoreActive();
 	updatePreferences();
 	updateServers();
 	updateWindowState();
-
-	setCertificateTrustRequestHandler(async (webContents, certificateUrl, error, certificate, isReplacing) => {
-		const { issuerName } = certificate || {};
-
-		const title = t('dialog.certificateError.title');
-		const message = t('dialog.certificateError.message', {
-			issuerName,
-		});
-		let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
-		if (isReplacing) {
-			detail = t('error.differentCertificate', { detail });
-		}
-
-		const { response } = await showMessageBox({
-			title,
-			message,
-			detail,
-			type: 'warning',
-			buttons: [
-				t('dialog.certificateError.yes'),
-				t('dialog.certificateError.no'),
-			],
-			cancelId: 1,
-		});
-
-		return response === 0;
-	});
 };

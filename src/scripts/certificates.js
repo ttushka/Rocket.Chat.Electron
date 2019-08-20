@@ -1,7 +1,6 @@
 import { remote } from 'electron';
 import { parse as parseURL } from 'url';
 import { reportError } from '../errorHandling';
-import ipc from '../ipc';
 import { readUserDataFile, writeUserDataFile } from './userData';
 
 
@@ -10,6 +9,9 @@ const { app } = remote;
 const certificatesFileName = 'certificate.json';
 const certificateTrustRequests = {};
 let certificates = {};
+let props = {
+	certificateTrustRequestHandler: null,
+};
 
 const loadCertificates = async () => {
 	try {
@@ -28,18 +30,17 @@ const persistCertificates = async () => {
 	}
 };
 
-export const clearCertificates = async () => {
+const clearCertificates = async () => {
 	certificates = {};
 	await persistCertificates();
 };
 
 const serializeCertificate = ({ issuerName, data }) => `${ issuerName }\n${ data.toString() }`;
 
-export const addTrustedCertificate = (certificateUrl, certificate) => {
+const addTrustedCertificate = (certificateUrl, certificate) => {
 	const { host } = parseURL(certificateUrl);
 	certificates[host] = serializeCertificate(certificate);
 	persistCertificates();
-	ipc.emit('certificates/added', certificateUrl, certificate);
 };
 
 const hasTrustedCertificateFor = (certificateUrl) => {
@@ -55,8 +56,6 @@ const isCertificateTrusted = (certificateUrl, certificate) => {
 
 	return certificates[host] === serializeCertificate(certificate);
 };
-
-let certificateTrustRequestHandler;
 
 const handleAppCertificateError = async (event, webContents, certificateUrl, error, certificate, callback) => {
 	if (isCertificateTrusted(certificateUrl, certificate)) {
@@ -74,6 +73,8 @@ const handleAppCertificateError = async (event, webContents, certificateUrl, err
 	certificateTrustRequests[fingerprint] = [callback];
 	const isReplacing = hasTrustedCertificateFor(certificateUrl);
 
+	const { certificateTrustRequestHandler } = props;
+
 	const isTrusted = certificateTrustRequestHandler
 		? await certificateTrustRequestHandler(webContents, certificateUrl, error, certificate, isReplacing)
 		: false;
@@ -88,7 +89,7 @@ const handleAppCertificateError = async (event, webContents, certificateUrl, err
 	delete certificateTrustRequests[fingerprint];
 };
 
-export const setupCertificates = () => {
+const setupCertificates = () => {
 	loadCertificates();
 
 	app.addListener('certificate-error', handleAppCertificateError);
@@ -98,6 +99,22 @@ export const setupCertificates = () => {
 	}, false);
 };
 
-export const setCertificateTrustRequestHandler = (handler) => {
-	certificateTrustRequestHandler = handler;
+let mounted = false;
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
+
+	if (mounted) {
+		return;
+	}
+
+	setupCertificates();
+	mounted = true;
+};
+
+export default {
+	setProps,
+	clear: clearCertificates,
 };

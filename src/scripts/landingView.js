@@ -1,6 +1,5 @@
 import { t } from 'i18next';
 import { addServer, validateServerURL } from './servers';
-import ipc from '../ipc';
 
 
 const defaultServerURL = 'https://open.rocket.chat';
@@ -108,10 +107,6 @@ const setProps = (partialProps) => {
 			setServerURL(event.currentTarget.value);
 		};
 
-		const handleCertificateAdded = () => {
-			validate();
-		};
-
 		window.addEventListener('online', handleConnectionChange);
 		window.addEventListener('offline', handleConnectionChange);
 		handleConnectionChange();
@@ -119,8 +114,6 @@ const setProps = (partialProps) => {
 		section.querySelector('#login-card').addEventListener('submit', handleFormSubmit, false);
 		section.querySelector('#login-card [name="host"]').addEventListener('blur', handleInputBlur, false);
 		section.querySelector('#login-card [name="host"]').addEventListener('change', handleInputChange, false);
-
-		ipc.connect('certificates/added', handleCertificateAdded);
 	}
 
 	const {

@@ -1,5 +1,4 @@
 import { remote } from 'electron';
-import ipc from '../ipc';
 import { reportError } from '../errorHandling';
 import { readAppDataFile, readUserDataFile, writeUserDataFile } from './userData';
 
@@ -105,14 +104,24 @@ export const quitAndInstallUpdate = () => {
 	}
 };
 
+let props = {
+	onCheckingForUpdates: null,
+	onUpdateNotAvailable: null,
+	onUpdateAvailable: null,
+	onUpdateDownloaded: null,
+	onError: null,
+};
+
 const handleCheckingForUpdate = () => {
 	isCheckingForUpdates = true;
-	ipc.emit('updates/checking');
+	const { onCheckingForUpdates } = props;
+	onCheckingForUpdates && onCheckingForUpdates();
 };
 
 const handleUpdateAvailable = async ({ version }) => {
 	if (updateSettings.skip === version) {
-		ipc.emit('updates/update-not-available');
+		const { onUpdateNotAvailable } = props;
+		onUpdateNotAvailable && onUpdateNotAvailable();
 		return;
 	}
 
@@ -120,7 +129,8 @@ const handleUpdateAvailable = async ({ version }) => {
 		return;
 	}
 
-	ipc.emit('updates/update-available', version);
+	const { onUpdateAvailable } = props;
+	onUpdateAvailable && onUpdateAvailable(version);
 	isCheckingForUpdates = false;
 };
 
@@ -129,20 +139,23 @@ const handleUpdateNotAvailable = () => {
 		return;
 	}
 
-	ipc.emit('updates/update-not-available');
+	const { onUpdateNotAvailable } = props;
+	onUpdateNotAvailable && onUpdateNotAvailable();
 	isCheckingForUpdates = false;
 };
 
 const handleUpdateDownloaded = () => {
-	ipc.emit('updates/update-downloaded');
+	const { onUpdateDownloaded } = props;
+	onUpdateDownloaded && onUpdateDownloaded();
 };
 
 const handleError = (error) => {
-	ipc.emit('updates/error', error);
+	const { onError } = props;
+	onError && onError(error);
 	isCheckingForUpdates = false;
 };
 
-export const setupUpdates = () => {
+const setupUpdates = () => {
 	loadUpdateSettings();
 
 	autoUpdater.addListener('checking-for-update', handleCheckingForUpdate);
@@ -162,4 +175,23 @@ export const setupUpdates = () => {
 	if (canAutoUpdate()) {
 		checkForUpdates();
 	}
+};
+
+let mounted = false;
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
+
+	if (mounted) {
+		return;
+	}
+
+	setupUpdates();
+	mounted = true;
+};
+
+export default {
+	setProps,
 };

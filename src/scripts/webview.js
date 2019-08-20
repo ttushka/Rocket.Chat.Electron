@@ -12,19 +12,7 @@ const { getCurrentWebContents } = remote;
 class WebView extends EventEmitter {
 	constructor() {
 		super();
-
 		this.webviewParentElement = document.body;
-
-		servers.forEach((host) => {
-			this.add(host);
-		});
-
-		ipcRenderer.on('screenshare-result', (e, id) => {
-			const webviewObj = this.getActive();
-			webviewObj.executeJavaScript(`
-				window.parent.postMessage({ sourceId: '${ id }' }, '*');
-			`);
-		});
 	}
 
 	loaded() {
@@ -219,4 +207,19 @@ class WebView extends EventEmitter {
 	}
 }
 
-export default new WebView();
+const instance = new WebView();
+
+export default Object.assign(instance, {
+	setProps: () => {
+		servers.forEach((host) => {
+			instance.add(host);
+		});
+
+		ipcRenderer.on('screenshare-result', (e, id) => {
+			const webviewObj = instance.getActive();
+			webviewObj.executeJavaScript(`
+				window.parent.postMessage({ sourceId: '${ id }' }, '*');
+			`);
+		});
+	},
+});

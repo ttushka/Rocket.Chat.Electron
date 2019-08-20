@@ -1,27 +1,17 @@
 import jetpack from 'fs-jetpack';
-import { EventEmitter } from 'events';
-import { remote, ipcRenderer } from 'electron';
-import i18n from '../i18n';
+import { remote } from 'electron';
 
 
-class Servers extends EventEmitter {
-	constructor() {
-		super();
-		this.load();
-		const processProtocol = this.getProtocolUrlFromProcess(remote.process.argv);
-		if (processProtocol) {
-			this.showHostConfirmation(processProtocol);
-		}
-		ipcRenderer.on('add-host', (e, host) => {
-			ipcRenderer.emit('focus');
-			if (this.hostExists(host)) {
-				this.setActive(host);
-			} else {
-				this.showHostConfirmation(host);
-			}
-		});
-	}
+const hostsKey = 'rocket.chat.hosts';
+const activeKey = 'rocket.chat.currentHost';
 
+let props = {
+	onActiveSetted: null,
+	onActiveCleared: null,
+	onTitleSetted: null,
+};
+
+class Servers {
 	get hosts() {
 		return this._hosts;
 	}
@@ -32,16 +22,8 @@ class Servers extends EventEmitter {
 		return true;
 	}
 
-	get hostsKey() {
-		return 'rocket.chat.hosts';
-	}
-
-	get activeKey() {
-		return 'rocket.chat.currentHost';
-	}
-
 	load() {
-		let hosts = localStorage.getItem(this.hostsKey);
+		let hosts = localStorage.getItem(hostsKey);
 
 		try {
 			hosts = JSON.parse(hosts);
@@ -54,7 +36,7 @@ class Servers extends EventEmitter {
 				};
 			}
 
-			localStorage.setItem(this.hostsKey, JSON.stringify(hosts));
+			localStorage.setItem(hostsKey, JSON.stringify(hosts));
 		}
 
 		if (hosts === null) {
@@ -71,7 +53,7 @@ class Servers extends EventEmitter {
 					url: item,
 				};
 			});
-			localStorage.setItem(this.hostsKey, JSON.stringify(hosts));
+			localStorage.setItem(hostsKey, JSON.stringify(hosts));
 		}
 
 		// Load server info from server config file
@@ -91,7 +73,7 @@ class Servers extends EventEmitter {
 							const url = result[title];
 							hosts[url] = { title, url };
 						});
-						localStorage.setItem(this.hostsKey, JSON.stringify(hosts));
+						localStorage.setItem(hostsKey, JSON.stringify(hosts));
 						// Assume user doesn't want sidebar if they only have one server
 						if (Object.keys(hosts).length === 1) {
 							localStorage.setItem('sidebar-closed', 'true');
@@ -105,12 +87,12 @@ class Servers extends EventEmitter {
 		}
 
 		this._hosts = hosts;
-		this.emit('loaded');
+		const { onServersLoaded } = props;
+		onServersLoaded && onServersLoaded();
 	}
 
 	save() {
-		localStorage.setItem(this.hostsKey, JSON.stringify(this._hosts));
-		this.emit('saved');
+		localStorage.setItem(hostsKey, JSON.stringify(this._hosts));
 	}
 
 	get(hostUrl) {
@@ -178,7 +160,8 @@ class Servers extends EventEmitter {
 		};
 		this.hosts = hosts;
 
-		this.emit('host-added', hostUrl);
+		const { onServerAdded } = props;
+		onServerAdded && onServerAdded(hostUrl);
 
 		return hostUrl;
 	}
@@ -192,12 +175,13 @@ class Servers extends EventEmitter {
 			if (this.active === hostUrl) {
 				this.clearActive();
 			}
-			this.emit('host-removed', hostUrl);
+			const { onServerRemoved } = props;
+			onServerRemoved && onServerRemoved(hostUrl);
 		}
 	}
 
 	get active() {
-		const active = localStorage.getItem(this.activeKey);
+		const active = localStorage.getItem(activeKey);
 		return active === 'null' ? null : active;
 	}
 
@@ -210,11 +194,13 @@ class Servers extends EventEmitter {
 		}
 
 		if (url) {
-			localStorage.setItem(this.activeKey, hostUrl);
-			this.emit('active-setted', url);
+			localStorage.setItem(activeKey, hostUrl);
+			const { onActiveSetted } = props;
+			onActiveSetted && onActiveSetted(url);
 			return true;
 		}
-		this.emit('loaded');
+		const { onServersLoaded } = props;
+		onServersLoaded && onServersLoaded();
 		return false;
 	}
 
@@ -223,58 +209,45 @@ class Servers extends EventEmitter {
 	}
 
 	clearActive() {
-		localStorage.removeItem(this.activeKey);
-		this.emit('active-cleared');
+		localStorage.removeItem(activeKey);
+		const { onActiveCleared } = props;
+		onActiveCleared && onActiveCleared();
 		return true;
 	}
 
-	setHostTitle(hostUrl, title) {
-		if (title === 'Rocket.Chat' && /https?:\/\/open\.rocket\.chat/.test(hostUrl) === false) {
-			title += ` - ${ hostUrl }`;
+	setHostTitle(serverURL, title) {
+		if (title === 'Rocket.Chat' && /https?:\/\/open\.rocket\.chat/.test(serverURL) === false) {
+			title += ` - ${ serverURL }`;
 		}
 		const { hosts } = this;
-		hosts[hostUrl].title = title;
+		hosts[serverURL].title = title;
 		this.hosts = hosts;
-		this.emit('title-setted', hostUrl, title);
-	}
-	getProtocolUrlFromProcess(args) {
-		let site = null;
-		if (args.length > 1) {
-			const protocolURI = args.find((arg) => arg.startsWith('rocketchat://'));
-			if (protocolURI) {
-				site = protocolURI.split(/\/|\?/)[2];
-				if (site) {
-					let scheme = 'https://';
-					if (protocolURI.includes('insecure=true')) {
-						scheme = 'http://';
-					}
-					site = scheme + site;
-				}
-			}
-		}
-		return site;
-	}
-	showHostConfirmation(host) {
-		return remote.dialog.showMessageBox({
-			type: 'question',
-			buttons: [i18n.__('dialog.addServer.add'), i18n.__('dialog.addServer.cancel')],
-			defaultId: 0,
-			title: i18n.__('dialog.addServer.title'),
-			message: i18n.__('dialog.addServer.message', { host }),
-		}, (response) => {
-			if (response === 0) {
-				this.validateHost(host)
-					.then(() => this.addHost(host))
-					.then(() => this.setActive(host))
-					.catch(() => remote.dialog.showErrorBox(i18n.__('dialog.addServerError.title'), i18n.__('dialog.addServerError.message', { host })));
-			}
-		});
+		const { onTitleSetted } = props;
+		onTitleSetted && onTitleSetted(serverURL, title);
 	}
 }
 
 const instance = new Servers();
 
-export default instance;
+let mounted = false;
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
+
+	if (mounted) {
+		return;
+	}
+
+	instance.load();
+	instance.restoreActive();
+	mounted = true;
+};
+
+export default Object.assign(instance, {
+	setProps,
+});
 
 export const getServers = () => {
 	const sorting = JSON.parse(localStorage.getItem('rocket.chat.sortOrder')) || [];
@@ -296,6 +269,10 @@ export const addServer = (serverURL) => {
 	instance.setActive(resolvedServerURL);
 
 	return resolvedServerURL;
+};
+
+export const sortServers = (serverURLs) => {
+	localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(serverURLs));
 };
 
 export const validateServerURL = (serverURL) => instance.validateHost(serverURL, 2000);
