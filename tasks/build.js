@@ -17,7 +17,7 @@ gulp.task('build:bundle', () => {
 	const env = getEnv();
 	return Promise.all([
 		bundle('src/main/index.js', 'app/main.js', { env }),
-		bundle('src/app.js', 'app/app.js', { env }),
+		bundle('src/renderer/index.js', 'app/renderer.js', { env }),
 		bundle('src/i18n/index.js', 'app/i18n/index.js', { env }),
 		bundle('src/preload.js', 'app/preload.js', { env }),
 	]);
