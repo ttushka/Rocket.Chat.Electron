@@ -2,11 +2,15 @@ const builtinModules = require('builtin-modules');
 const jetpack = require('fs-jetpack');
 const path = require('path');
 const { rollup } = require('rollup');
+const babel = require('rollup-plugin-babel');
 const commonjs = require('rollup-plugin-commonjs');
+const globImport = require('rollup-plugin-glob-import');
 const istanbul = require('rollup-plugin-istanbul');
 const json = require('rollup-plugin-json');
 const nodeResolve = require('rollup-plugin-node-resolve');
 const replace = require('rollup-plugin-replace');
+const url = require('rollup-plugin-url');
+const svgr = require('@svgr/rollup').default;
 const appManifest = require('../package.json');
 
 
@@ -28,12 +32,27 @@ const bundle = async (src, dest, { coverage = false, env = 'development' } = {})
 					sourcemap: true,
 				}),
 			] : []),
+			url({
+				limit: 1024 * 1024,
+				include: ['src/**/*.jpg', 'src/**/*.png'],
+			}),
+			svgr({
+				svgoConfig: {
+					plugins: {
+						removeViewBox: false,
+					},
+				},
+			}),
 			json(),
 			replace({
 				'process.env.BUGSNAG_API_KEY': JSON.stringify(process.env.BUGSNAG_API_KEY),
 				'process.env.NODE_ENV': JSON.stringify(env),
 			}),
-			nodeResolve(),
+			globImport(),
+			babel(),
+			nodeResolve({
+				extensions: ['.js', '.jsx', '.json'],
+			}),
 			commonjs(),
 		],
 	};

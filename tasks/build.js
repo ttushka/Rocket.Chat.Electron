@@ -34,5 +34,6 @@ gulp.task('watch', () => {
 	gulp.watch('src/public/**/*', gulp.task('build:public'));
 	gulp.watch('src/i18n/lang/**/*', gulp.task('build:i18n'));
 	gulp.watch('src/**/*.js', gulp.task('build:bundle'));
+	gulp.watch('src/**/*.jsx', gulp.task('build:bundle'));
 	gulp.watch('src/**/*.less', gulp.task('build:less'));
 });

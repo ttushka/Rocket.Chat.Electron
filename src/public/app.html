@@ -4,15 +4,10 @@
 	<meta charset="utf-8" />
 	<title>Rocket.Chat</title>
 	<link rel="stylesheet" href="../stylesheets/main.css">
-	<script>
-		window.addEventListener('load', () => {
-			const script = document.createElement('script');
-			script.src = '../renderer.js';
-			document.body.appendChild(script);
-		});
-	</script>
 </head>
 <body class="app-page app-page--loading">
+	<div id="root"></div>
+
 	<div class="sidebar sidebar--hidden">
 		<div class="sidebar__inner">
 			<ol class="sidebar__list sidebar__server-list">
@@ -125,5 +120,7 @@
 	</dialog>
 
 	<div class="drag-region"></div>
+
+	<script defer src="../renderer.js"></script>
 </body>
 </html>

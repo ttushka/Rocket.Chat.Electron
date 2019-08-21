@@ -27,6 +27,7 @@ export const setupMainWindow = () => {
 		minHeight: 400,
 		titleBarStyle: 'hidden',
 		show: false,
+		backgroundColor: '#2f343d',
 		webPreferences: {
 			nodeIntegration: true,
 			webviewTag: true,

@@ -3,6 +3,7 @@ import jetpack from 'fs-jetpack';
 import i18next from 'i18next';
 import i18nextNodeFileSystemBackend from 'i18next-node-fs-backend';
 import i18nextSyncFileSystemBackend from 'i18next-sync-fs-backend';
+import { initReactI18next } from 'react-i18next';
 
 
 const app = mainApp || remote.app;
@@ -40,6 +41,7 @@ async function initialize({ synchronous = false } = {}) {
 	const result = (
 		i18next
 			.use(synchronous ? i18nextSyncFileSystemBackend : i18nextNodeFileSystemBackend)
+			.use(initReactI18next)
 			.init({
 				lng: globalLocale,
 				fallbackLng: defaultLocale,

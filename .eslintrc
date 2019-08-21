@@ -1,9 +1,10 @@
 {
   "extends": [
-    "@rocket.chat/eslint-config"
+    "@rocket.chat/eslint-config",
+    "plugin:react/recommended"
   ],
-  "parserOptions": {
-		"sourceType": "module",
-		"ecmaVersion": 2018
-	}
+  "parser": "babel-eslint",
+  "rules": {
+    "react/prop-types": 0
+  }
 }

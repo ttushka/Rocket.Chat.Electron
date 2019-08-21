@@ -1,17 +1,18 @@
 import { remote, clipboard } from 'electron';
 import { t } from 'i18next';
+import React from 'react';
+import ReactDOM from 'react-dom';
 import { reportError, reportWarning } from '../errorHandling';
 import aboutModal from './aboutModal';
 import certificates from './certificates';
+import { App } from './components/App';
 import contextMenu from './contextMenu';
 import { showErrorBox, showOpenDialog, showMessageBox } from './dialogs';
-import dock from './dock';
-import landingView from './landingView';
 import menus from './menus';
 import screenSharingModal from './screenSharingModal';
 import servers, { getServers, getActiveServerURL, sortServers, validateServerURL, setActiveServerURL, setServerProperties, addServer, removeServer } from './servers';
 import sideBar from './sideBar';
-import spellChecking, {
+import {
 	installSpellCheckingDictionaries,
 	getSpellCheckingDictionariesPath,
 	setSpellCheckingDictionaryEnabled,
@@ -28,14 +29,11 @@ import updates, {
 	canUpdate,
 	canAutoUpdate,
 	canSetAutoUpdate,
-	setAutoUpdate,
-	checkForUpdates,
 	quitAndInstallUpdate,
 } from './updates';
 import { requestAppDataReset } from './userData';
 import webview from './webview';
 import mainWindow from './mainWindow';
-import basicAuth from './basicAuth';
 import deepLinks from './deepLinks';
 import preferences, { getPreferences, setPreferences } from './preferences';
 
@@ -51,7 +49,6 @@ let editingParams = {};
 let spellCheckingCorrections = [];
 let spellCheckingDictionaries = [];
 
-
 const update = () => {
 	const isMainWindowVisible = getCurrentWindow().isVisible();
 	const isMainWindowFullScreen = getCurrentWindow().isFullScreen();
@@ -59,91 +56,24 @@ const update = () => {
 	const activeServerURL = getActiveServerURL();
 	const preferences = getPreferences();
 
-	const {
-		showWindowOnUnreadChanged,
-		hasTrayIcon,
-		isMenuBarVisible,
-		isSideBarVisible,
-	} = preferences;
-
-	const mentionCount = Object.values(badges)
-		.filter((badge) => Number.isInteger(badge))
-		.reduce((sum, count) => sum + count, 0);
-	const globalBadge = mentionCount
-		|| (Object.values(badges).some((badge) => !!badge) && '•')
-		|| null;
-
-	aboutModal.setProps({
-		visible: openModal === 'about',
-		...updateInfo,
-	});
-
-	contextMenu.setProps({
-		webContents,
-		...editingParams,
-		spellCheckingCorrections,
-		spellCheckingDictionaries,
-	});
-
-	dock.setProps({
-		hasTrayIcon,
-		badge: globalBadge,
-	});
-
-	landingView.setProps({
-		visible: !activeServerURL,
-	});
-
-	mainWindow.setProps({
-		hasTrayIcon,
-		showWindowOnUnreadChanged,
-		badge: globalBadge,
-	});
-
-	menus.setProps({
-		servers,
-		activeServerURL,
-		hasTrayIcon,
-		isFullScreen: isMainWindowFullScreen,
-		isMenuBarVisible,
-		isSideBarVisible,
-		showWindowOnUnreadChanged,
-		webContents,
-	});
-
-	screenSharingModal.setProps({
-		visible: openModal === 'screenSharing',
-	});
-
-	sideBar.setProps({
-		visible: isSideBarVisible,
-		servers,
-		activeServerURL,
-		styles: sideBarStyles,
-		badges,
-	});
-
-	touchBar.setProps({
-		servers,
-		activeServerURL,
-	});
-
-	trayIcon.setProps({
-		visible: hasTrayIcon,
-		isMainWindowVisible,
-		badge: globalBadge,
-	});
-
-	updateModal.setProps({
-		visible: openModal === 'update',
-		...updateInfo,
-	});
-
-	webview.setProps({
-		servers,
-		activeServerURL,
-		hasSideBarPadding: !isSideBarVisible,
-	});
+	ReactDOM.render(<App
+		isMainWindowVisible={isMainWindowVisible}
+		isMainWindowFullScreen={isMainWindowFullScreen}
+		servers={servers}
+		activeServerURL={activeServerURL}
+		preferences={preferences}
+		sideBarStyles={sideBarStyles}
+		badges={badges}
+		openModal={openModal}
+		updateInfo={updateInfo}
+		webContents={webContents}
+		editingParams={editingParams}
+		spellCheckingCorrections={spellCheckingCorrections}
+		spellCheckingDictionaries={spellCheckingDictionaries}
+		canUpdate={canUpdate()}
+		canAutoUpdate={canAutoUpdate()}
+		canSetAutoUpdate={canSetAutoUpdate()}
+	/>, document.getElementById('root'));
 };
 
 const setSideBarStyle = (serverURL, style) => {
@@ -199,6 +129,7 @@ export default () => {
 	window.addEventListener('beforeunload', () => {
 		try {
 			getCurrentWindow().removeAllListeners();
+			ReactDOM.unmountComponentAtNode(document.getElementById('root'));
 		} catch (error) {
 			getGlobal('console').error(error);
 		}
@@ -209,49 +140,8 @@ export default () => {
 	});
 
 	aboutModal.setProps({
-		canUpdate: canUpdate(),
-		canAutoUpdate: canAutoUpdate(),
-		canSetAutoUpdate: canSetAutoUpdate(),
-		currentVersion: app.getVersion(),
 		onDismiss: () => {
 			setOpenModal(null);
-		},
-		onClickCheckForUpdates: () => {
-			checkForUpdates();
-		},
-		onToggleCheckForUpdatesOnStart: (isEnabled) => {
-			setAutoUpdate(isEnabled);
-		},
-	});
-
-	basicAuth.setProps({});
-
-	certificates.setProps({
-		certificateTrustRequestHandler: async (webContents, certificateUrl, error, certificate, isReplacing) => {
-			const { issuerName } = certificate || {};
-
-			const title = t('dialog.certificateError.title');
-			const message = t('dialog.certificateError.message', {
-				issuerName,
-			});
-			let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
-			if (isReplacing) {
-				detail = t('error.differentCertificate', { detail });
-			}
-
-			const { response } = await showMessageBox({
-				title,
-				message,
-				detail,
-				type: 'warning',
-				buttons: [
-					t('dialog.certificateError.yes'),
-					t('dialog.certificateError.no'),
-				],
-				cancelId: 1,
-			});
-
-			return response === 0;
 		},
 	});
 
@@ -344,8 +234,6 @@ export default () => {
 			}
 		},
 	});
-
-	landingView.setProps({});
 
 	mainWindow.setProps({
 		onStateChange: update,
@@ -515,8 +403,6 @@ export default () => {
 		},
 	});
 
-	spellChecking.setProps({});
-
 	touchBar.setProps({
 		onTouchFormattingButton: (buttonClass) => {
 			if (webContents === getCurrentWebContents()) {
@@ -534,7 +420,6 @@ export default () => {
 	});
 
 	trayIcon.setProps({
-		appName: app.getName(),
 		onToggleMainWindow: (isVisible) => {
 			if (isVisible) {
 				getCurrentWindow().show();
@@ -549,7 +434,6 @@ export default () => {
 	});
 
 	updateModal.setProps({
-		currentVersion: app.getVersion(),
 		onDismiss: () => {
 			setOpenModal(null);
 		},
