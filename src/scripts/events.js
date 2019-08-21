@@ -35,60 +35,48 @@ import webview from './webview';
 import mainWindow from './mainWindow';
 import basicAuth from './basicAuth';
 import deepLinks from './deepLinks';
+import preferences, { getPreferences, setPreferences } from './preferences';
 
 
 const { app, getCurrentWindow, shell } = remote;
 
-const updatePreferences = () => {
-	const showWindowOnUnreadChanged = localStorage.getItem('showWindowOnUnreadChanged') === 'true';
-	const hasTrayIcon = localStorage.getItem('hideTray') ?
-		localStorage.getItem('hideTray') !== 'true' : (process.platform !== 'linux');
-	const isMenuBarVisible = localStorage.getItem('autohideMenu') !== 'true';
-	const isSideBarVisible = localStorage.getItem('sidebar-closed') !== 'true';
+
+const update = () => {
+	const isMainWindowVisible = getCurrentWindow().isVisible();
+	const isMainWindowFullScreen = getCurrentWindow().isFullScreen();
+	const servers = getServers();
+	const activeServerURL = getActiveServerURL();
+	const {
+		showWindowOnUnreadChanged,
+		hasTrayIcon,
+		isMenuBarVisible,
+		isSideBarVisible,
+	} = getPreferences();
+
+	dock.setProps({
+		hasTrayIcon,
+	});
+
+	landingView.setProps({
+		visible: !activeServerURL,
+	});
 
 	mainWindow.setProps({
 		hasTrayIcon,
 	});
 
 	menus.setProps({
+		servers,
+		activeServerURL,
 		hasTrayIcon,
-		isFullScreen: mainWindow.isFullScreen(),
+		isFullScreen: isMainWindowFullScreen,
 		isMenuBarVisible,
 		isSideBarVisible,
 		showWindowOnUnreadChanged,
 	});
 
-	trayIcon.setProps({
-		visible: hasTrayIcon,
-	});
-
-	dock.setProps({
-		hasTrayIcon,
-	});
-
 	sideBar.setProps({
 		visible: isSideBarVisible,
-	});
-
-	webview.setSidebarPaddingEnabled(!isSideBarVisible);
-};
-
-
-const update = () => {
-	const isMainWindowVisible = getCurrentWindow().isVisible();
-	const servers = getServers();
-	const activeServerURL = getActiveServerURL();
-
-	landingView.setProps({
-		visible: !activeServerURL,
-	});
-
-	menus.setProps({
-		servers,
-		activeServerURL,
-	});
-
-	sideBar.setProps({
 		servers,
 		activeServerURL,
 	});
@@ -99,12 +87,14 @@ const update = () => {
 	});
 
 	trayIcon.setProps({
+		visible: hasTrayIcon,
 		isMainWindowVisible,
 	});
 
 	webview.setProps({
 		servers,
 		activeServerURL,
+		hasSideBarPadding: !isSideBarVisible,
 	});
 };
 
@@ -114,6 +104,8 @@ const destroyAll = () => {
 		const mainWindow = getCurrentWindow();
 		mainWindow.removeListener('hide', update);
 		mainWindow.removeListener('show', update);
+		mainWindow.removeListener('enter-full-screen', update);
+		mainWindow.removeListener('leave-full-screen', update);
 		mainWindow.removeAllListeners();
 	} catch (error) {
 		remote.getGlobal('console').error(error);
@@ -128,6 +120,8 @@ export default () => {
 
 	getCurrentWindow().on('hide', update);
 	getCurrentWindow().on('show', update);
+	getCurrentWindow().on('enter-full-screen', update);
+	getCurrentWindow().on('leave-full-screen', update);
 
 	aboutModal.setProps({
 		canUpdate: canUpdate(),
@@ -327,20 +321,16 @@ export default () => {
 			webContents.goForward();
 		},
 		onToggleTrayIcon: (isEnabled) => {
-			localStorage.setItem('hideTray', JSON.stringify(!isEnabled));
-			updatePreferences();
+			setPreferences({ hasTrayIcon: isEnabled });
 		},
 		onToggleFullScreen: (isEnabled) => {
 			getCurrentWindow().setFullScreen(isEnabled);
-			updatePreferences();
 		},
 		onToggleMenuBar: (isEnabled) => {
-			localStorage.setItem('autohideMenu', JSON.stringify(!isEnabled));
-			updatePreferences();
+			setPreferences({ isMenuBarVisible: isEnabled });
 		},
 		onToggleSideBar: (isEnabled) => {
-			localStorage.setItem('sidebar-closed', JSON.stringify(!isEnabled));
-			updatePreferences();
+			setPreferences({ isSideBarVisible: isEnabled });
 		},
 		onClickResetZoom: () => {
 			remote.getCurrentWebContents().setZoomLevel(0);
@@ -364,8 +354,7 @@ export default () => {
 			remote.getCurrentWebContents().toggleDevTools();
 		},
 		onToggleShowWindowOnUnreadChanged: (isEnabled) => {
-			localStorage.setItem('showWindowOnUnreadChanged', JSON.stringify(isEnabled));
-			updatePreferences();
+			setPreferences({ showWindowOnUnreadChanged: isEnabled });
 		},
 		onClickOpenURL: (url) => {
 			shell.openExternal(url);
@@ -390,6 +379,10 @@ export default () => {
 
 			requestAppDataReset();
 		},
+	});
+
+	preferences.setProps({
+		onUpdate: update,
 	});
 
 	screenSharingModal.setProps({
@@ -606,19 +599,9 @@ export default () => {
 		sideBar.setProps({ styles });
 	});
 
-	webview.on('dom-ready', () => {
-		const hasSidebar = localStorage.getItem('sidebar-closed') !== 'true';
-		sideBar.setProps({
-			visible: hasSidebar,
-		});
-		webview.setSidebarPaddingEnabled(!hasSidebar);
-	});
-
 	webview.setProps({
 		onNavigate: (serverURL, url) => {
 			servers.setLastPath(serverURL, url);
 		},
 	});
-
-	updatePreferences();
 };

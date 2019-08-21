@@ -208,6 +208,7 @@ const setProps = (partialProps) => {
 	const {
 		servers: propServers,
 		activeServerURL,
+		hasSideBarPadding,
 	} = props;
 
 	const addedServers = propServers.filter(({ url }) => !servers.some((server) => server.url === url));
@@ -225,6 +226,8 @@ const setProps = (partialProps) => {
 	});
 
 	instance.setActive(activeServerURL);
+
+	instance.setSidebarPaddingEnabled(hasSideBarPadding);
 };
 
 export default Object.assign(instance, {
