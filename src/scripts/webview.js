@@ -1,205 +1,22 @@
 import { remote } from 'electron';
-import { EventEmitter } from 'events';
-import screenSharingModal from './screenSharingModal';
-import { spellCheckWords, getSpellCheckingDictionaries, getEnabledSpellCheckingDictionaries, getSpellCheckingCorrections } from './spellChecking';
-import contextMenu from './contextMenu';
-import menus from './menus';
+import {
+	spellCheckWords,
+} from './spellChecking';
 import ipc from '../ipc';
 
 
-const { getCurrentWebContents } = remote;
+const { app } = remote;
+
+const getPathFromApp = (path) => `${ app.getAppPath() }/app/${ path }`;
 
 let props = {
 	servers: [],
+	activeServerURL: null,
 };
 let servers = [];
 
-class WebView extends EventEmitter {
-	constructor() {
-		super();
-		this.webviewParentElement = document.body;
-	}
-
-	add(host) {
-		let webviewObj = this.getByUrl(host.url);
-		if (webviewObj) {
-			return;
-		}
-
-		webviewObj = document.createElement('webview');
-		webviewObj.classList.add('webview');
-		webviewObj.setAttribute('server', host.url);
-		webviewObj.setAttribute('preload', '../preload.js');
-		webviewObj.setAttribute('disablewebsecurity', 'disablewebsecurity');
-
-		webviewObj.addEventListener('did-navigate-in-page', (lastPath) => {
-			if ((lastPath.url).includes(host.url)) {
-				const { onNavigate } = props;
-				onNavigate && onNavigate(host.url, lastPath.url);
-			}
-		});
-
-		webviewObj.addEventListener('console-message', (e) => {
-			console.log('webview:', e.message);
-		});
-
-		webviewObj.addEventListener('ipc-message', (event) => {
-			this.emit(`ipc-message-${ event.channel }`, host.url, event.args);
-
-			switch (event.channel) {
-				case 'get-sourceId': {
-					screenSharingModal.setProps({
-						visible: true,
-					});
-
-					const disconnect = ipc.connect('screenshare-result', (event, id) => {
-						webviewObj.executeJavaScript(`window.parent.postMessage({ sourceId: '${ id }' }, '*');`);
-						disconnect();
-					});
-					break;
-				}
-
-				case 'reload-server': {
-					const webviewObj = this.getByUrl(host.url);
-					const server = webviewObj.getAttribute('server');
-					webviewObj.loadURL(server);
-					break;
-				}
-				case 'spell-checker/check': {
-					const [id, words] = event.args;
-					const callback = (mispeltWords) => {
-						webviewObj.send('spell-checker/check/result', id, mispeltWords);
-					};
-					spellCheckWords(words, callback);
-					break;
-				}
-			}
-		});
-
-		webviewObj.addEventListener('dom-ready', () => {
-			webviewObj.classList.add('ready');
-			this.emit('dom-ready', webviewObj, host.url);
-		});
-
-		webviewObj.addEventListener('did-fail-load', (e) => {
-			if (e.isMainFrame) {
-				webviewObj.loadURL(`file://${ __dirname }/loading-error.html`);
-			}
-		});
-
-		webviewObj.addEventListener('did-get-response-details', (e) => {
-			if (e.resourceType === 'mainFrame' && e.httpResponseCode >= 500) {
-				webviewObj.loadURL(`file://${ __dirname }/loading-error.html`);
-			}
-		});
-
-		webviewObj.addEventListener('context-menu', (event) => {
-			event.preventDefault();
-			const webContents = webviewObj.getWebContents();
-			contextMenu.setProps({
-				webContents,
-				...event.params,
-				spellCheckingCorrections: getSpellCheckingCorrections(event.params.selectionText),
-				spellCheckingDictionaries: getSpellCheckingDictionaries().map((name) => ({
-					name,
-					enabled: getEnabledSpellCheckingDictionaries().includes(name),
-				})),
-			});
-			contextMenu.trigger();
-		});
-
-		webviewObj.addEventListener('focus', () => {
-			menus.setProps({
-				webContents: webviewObj.getWebContents(),
-			});
-		});
-
-		webviewObj.addEventListener('blur', () => {
-			menus.setProps({
-				webContents: getCurrentWebContents(),
-			});
-		});
-
-		this.webviewParentElement.appendChild(webviewObj);
-
-		webviewObj.src = host.lastPath || host.url;
-	}
-
-	remove(hostUrl) {
-		const el = this.getByUrl(hostUrl);
-		if (el) {
-			el.remove();
-		}
-	}
-
-	getByUrl(hostUrl) {
-		return this.webviewParentElement.querySelector(`webview[server="${ hostUrl }"]`);
-	}
-
-	getActive() {
-		return document.querySelector('webview.active');
-	}
-
-	isActive(hostUrl) {
-		return !!this.webviewParentElement.querySelector(`webview.active[server="${ hostUrl }"]`);
-	}
-
-	deactiveAll() {
-		let item;
-		while (!(item = this.getActive()) === false) {
-			item.classList.remove('active');
-		}
-	}
-
-	setActive(hostUrl) {
-		if (this.isActive(hostUrl)) {
-			return;
-		}
-
-		this.deactiveAll();
-		const item = this.getByUrl(hostUrl);
-		if (item) {
-			item.classList.add('active');
-		}
-		this.focusActive();
-	}
-
-	focusActive() {
-		const active = this.getActive();
-		if (active) {
-			active.focus();
-			return true;
-		}
-		return false;
-	}
-
-	goBack() {
-		this.getActive().goBack();
-	}
-
-	goForward() {
-		this.getActive().goForward();
-	}
-
-	setSidebarPaddingEnabled(enabled) {
-		if (process.platform !== 'darwin') {
-			return;
-		}
-
-		Array.from(document.querySelectorAll('webview.ready'))
-			.filter((webviewObj) => webviewObj.insertCSS)
-			.forEach((webviewObj) => webviewObj.insertCSS(`
-				.sidebar {
-					padding-top: ${ enabled ? '10px' : '0' };
-					transition: margin .5s ease-in-out;
-				}
-			`));
-	}
-}
-
-const instance = new WebView();
-
 const setProps = (partialProps) => {
+	const prevProps = props;
 	props = {
 		...props,
 		...partialProps,
@@ -217,19 +34,173 @@ const setProps = (partialProps) => {
 		servers = servers.filter((server) => !removedServers.includes(server)).concat(addedServers);
 	}
 
-	addedServers.forEach((server) => {
-		instance.add(server);
+	Array.from(document.querySelectorAll('webview'))
+		.filter((webviewObj) => removedServers.some((server) => server.url === webviewObj.dataset.server))
+		.forEach((webviewObj) => {
+			webviewObj.remove();
+		});
+
+	servers.forEach((server) => {
+		const webviewObj = document.querySelector(`webview[data-server="${ server.url }"]`)
+			|| document.createElement('webview');
+
+		if (webviewObj.parentElement) {
+			return;
+		}
+
+		webviewObj.setAttribute('preload', `file://${ getPathFromApp('./preload.js') }`);
+		webviewObj.toggleAttribute('disablewebsecurity', true);
+		webviewObj.classList.add('webview');
+		webviewObj.dataset.server = server.url;
+
+		webviewObj.addEventListener('dom-ready', () => {
+			webviewObj.classList.add('ready');
+		});
+
+		webviewObj.addEventListener('did-navigate-in-page', (lastPath) => {
+			if ((lastPath.url).includes(server.url)) {
+				const { onNavigate } = props;
+				onNavigate && onNavigate(server.url, lastPath.url);
+			}
+		});
+
+		webviewObj.addEventListener('console-message', ({ level, line, message, sourceId }) => {
+			const log = {
+				[-1]: console.debug,
+				0: console.log,
+				1: console.warn,
+				2: console.error,
+			}[level];
+			log(`${ server.url }\n${ message }\n${ sourceId } : ${ line }`);
+		});
+
+		webviewObj.addEventListener('ipc-message', (event) => {
+			const { channel, args } = event;
+
+			switch (channel) {
+				case 'reload-server': {
+					webviewObj.loadURL(server.url);
+					break;
+				}
+
+				case 'spell-checker/check': {
+					const [id, words] = args;
+					const callback = (mispeltWords) => {
+						webviewObj.send('spell-checker/check/result', id, mispeltWords);
+					};
+					spellCheckWords(words, callback);
+					break;
+				}
+
+				case 'focus': {
+					const { onRequestFocus } = props;
+					onRequestFocus && onRequestFocus(server.url);
+					break;
+				}
+
+				case 'get-sourceId': {
+					const { onRequestScreenSharing } = props;
+					onRequestScreenSharing && onRequestScreenSharing(server.url);
+					break;
+				}
+
+				case 'sidebar-style': {
+					const [style] = args;
+					const { onSideBarStyleChange } = props;
+					onSideBarStyleChange && onSideBarStyleChange(server.url, style);
+					break;
+				}
+
+				case 'title-changed': {
+					const [title] = args;
+					const { onTitleChange } = props;
+					onTitleChange && onTitleChange(server.url, title);
+					break;
+				}
+
+				case 'unread-changed': {
+					const [badge] = args;
+					const { onBadgeChange } = props;
+					onBadgeChange && onBadgeChange(server.url, badge);
+					break;
+				}
+			}
+		});
+
+		webviewObj.addEventListener('did-fail-load', (e) => {
+			if (e.isMainFrame) {
+				webviewObj.loadURL(`file://${ getPathFromApp('loading-error.html') }`);
+			}
+		});
+
+		webviewObj.addEventListener('did-get-response-details', (e) => {
+			if (e.resourceType === 'mainFrame' && e.httpResponseCode >= 500) {
+				webviewObj.loadURL(`file://${ getPathFromApp('loading-error.html') }`);
+			}
+		});
+
+		webviewObj.addEventListener('context-menu', (event) => {
+			event.preventDefault();
+			const { onContextMenu } = props;
+			onContextMenu && onContextMenu(server.url, webviewObj.getWebContents(), event.params);
+		});
+
+		webviewObj.addEventListener('focus', () => {
+			const { onFocus } = props;
+			onFocus && onFocus(server.url, webviewObj.getWebContents());
+		});
+
+		webviewObj.addEventListener('blur', () => {
+			const { onBlur } = props;
+			onBlur && onBlur(server.url, webviewObj.getWebContents());
+		});
+
+		const disconnect = ipc.connect('screenshare-result', (event, id) => {
+			webviewObj.executeJavaScript(`window.parent.postMessage({ sourceId: '${ id }' }, '*');`);
+			disconnect();
+		});
+
+		document.body.appendChild(webviewObj);
+
+		webviewObj.src = server.lastPath || server.url;
 	});
 
-	removedServers.forEach((server) => {
-		instance.remove(server.url);
-	});
+	Array.from(document.querySelectorAll('webview'))
+		.forEach((webviewObj) => {
+			webviewObj.classList.toggle('active', webviewObj.dataset.server === activeServerURL);
+			if (webviewObj.dataset.server === activeServerURL && prevProps.activeServerURL !== activeServerURL) {
+				webviewObj.focus();
+			}
+		});
 
-	instance.setActive(activeServerURL);
+	Array.from(document.querySelectorAll('webview.ready'))
+		.filter((webviewObj) => webviewObj.insertCSS)
+		.forEach((webviewObj) => {
+			if (process.platform !== 'darwin') {
+				return;
+			}
 
-	instance.setSidebarPaddingEnabled(hasSideBarPadding);
+			webviewObj.insertCSS(`
+				.sidebar {
+					padding-top: ${ hasSideBarPadding ? '10px' : '0' };
+					transition: margin .5s ease-in-out;
+				}
+			`);
+		});
 };
 
-export default Object.assign(instance, {
+const reload = (serverURL) => {
+	const webviewObj = document.querySelector(`webview[data-server="${ serverURL }"]`);
+	webviewObj && webviewObj.reload();
+};
+
+const openDevTools = (serverURL) => {
+	const webviewObj = document.querySelector(`webview[data-server="${ serverURL }"]`);
+	webviewObj && webviewObj.openDevTools();
+};
+
+export default {
 	setProps,
-});
+	reload,
+	openDevTools,
+};

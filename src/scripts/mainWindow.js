@@ -1,11 +1,11 @@
-import { remote, ipcRenderer } from 'electron';
+import { remote } from 'electron';
 import jetpack from 'fs-jetpack';
 
 
 const { app, getCurrentWebContents, getCurrentWindow } = remote;
 
-const focus = () => {
-	const mainWindow = remote.getCurrentWindow();
+const activate = () => {
+	const mainWindow = getCurrentWindow();
 
 	if (process.platform === 'win32') {
 		if (mainWindow.isVisible()) {
@@ -27,8 +27,6 @@ const focus = () => {
 	mainWindow.show();
 	mainWindow.focus();
 };
-
-ipcRenderer.on('focus', focus);
 
 class WindowStateHandler {
 	constructor(window, name) {
@@ -180,9 +178,18 @@ const attachWindowStateHandling = async (mainWindow) => {
 		mainWindow.destroy();
 	};
 
-	mainWindow.on('resize', () => windowStateHandler.fetchAndSave());
-	mainWindow.on('move', () => windowStateHandler.fetchAndSave());
-	mainWindow.on('show', () => windowStateHandler.fetchAndSave());
+	const handleStateChange = () => {
+		windowStateHandler.fetchAndSave();
+		const { onStateChange } = props;
+		onStateChange && onStateChange(windowStateHandler.state);
+	};
+
+	mainWindow.on('resize', handleStateChange);
+	mainWindow.on('move', handleStateChange);
+	mainWindow.on('show', handleStateChange);
+	mainWindow.on('hide', handleStateChange);
+	mainWindow.on('enter-full-screen', handleStateChange);
+	mainWindow.on('leave-full-screen', handleStateChange);
 	mainWindow.on('close', async (event) => {
 		if (!mainWindow) {
 			return;
@@ -214,12 +221,28 @@ export const setupMainWindowStateHandling = () => {
 };
 
 const setProps = (partialProps) => {
+	const prevProps = props;
 	props = {
 		...props,
 		...partialProps,
 	};
+
+	const {
+		badge,
+		showWindowOnUnreadChanged,
+	} = props;
+
+	if (prevProps.badge !== badge && typeof badge === 'number' && showWindowOnUnreadChanged) {
+		const mainWindow = getCurrentWindow();
+		if (!mainWindow.isFocused()) {
+			mainWindow.once('focus', () => mainWindow.flashFrame(false));
+			mainWindow.showInactive();
+			mainWindow.flashFrame(true);
+		}
+	}
 };
 
 export default Object.assign(getCurrentWindow(), {
 	setProps,
+	activate,
 });

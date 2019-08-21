@@ -1,7 +1,6 @@
 import { remote, clipboard } from 'electron';
 import { t } from 'i18next';
 import { reportError, reportWarning } from '../errorHandling';
-import ipc from '../ipc';
 import aboutModal from './aboutModal';
 import certificates from './certificates';
 import contextMenu from './contextMenu';
@@ -10,12 +9,15 @@ import dock from './dock';
 import landingView from './landingView';
 import menus from './menus';
 import screenSharingModal from './screenSharingModal';
-import servers, { getServers, getActiveServerURL, sortServers, validateServerURL } from './servers';
+import servers, { getServers, getActiveServerURL, sortServers, validateServerURL, setActiveServerURL, setServerProperties, addServer, removeServer } from './servers';
 import sideBar from './sideBar';
 import spellChecking, {
 	installSpellCheckingDictionaries,
 	getSpellCheckingDictionariesPath,
 	setSpellCheckingDictionaryEnabled,
+	getSpellCheckingCorrections,
+	getSpellCheckingDictionaries,
+	getEnabledSpellCheckingDictionaries,
 } from './spellChecking';
 import touchBar from './touchBar';
 import trayIcon from './trayIcon';
@@ -38,7 +40,16 @@ import deepLinks from './deepLinks';
 import preferences, { getPreferences, setPreferences } from './preferences';
 
 
-const { app, getCurrentWindow, shell } = remote;
+const { app, getCurrentWebContents, getCurrentWindow, getGlobal, shell } = remote;
+
+let sideBarStyles = {};
+let badges = {};
+let openModal = null;
+let updateInfo = {};
+let webContents = getCurrentWebContents();
+let editingParams = {};
+let spellCheckingCorrections = [];
+let spellCheckingDictionaries = [];
 
 
 const update = () => {
@@ -46,15 +57,37 @@ const update = () => {
 	const isMainWindowFullScreen = getCurrentWindow().isFullScreen();
 	const servers = getServers();
 	const activeServerURL = getActiveServerURL();
+	const preferences = getPreferences();
+
 	const {
 		showWindowOnUnreadChanged,
 		hasTrayIcon,
 		isMenuBarVisible,
 		isSideBarVisible,
-	} = getPreferences();
+	} = preferences;
+
+	const mentionCount = Object.values(badges)
+		.filter((badge) => Number.isInteger(badge))
+		.reduce((sum, count) => sum + count, 0);
+	const globalBadge = mentionCount
+		|| (Object.values(badges).some((badge) => !!badge) && '•')
+		|| null;
+
+	aboutModal.setProps({
+		visible: openModal === 'about',
+		...updateInfo,
+	});
+
+	contextMenu.setProps({
+		webContents,
+		...editingParams,
+		spellCheckingCorrections,
+		spellCheckingDictionaries,
+	});
 
 	dock.setProps({
 		hasTrayIcon,
+		badge: globalBadge,
 	});
 
 	landingView.setProps({
@@ -63,6 +96,8 @@ const update = () => {
 
 	mainWindow.setProps({
 		hasTrayIcon,
+		showWindowOnUnreadChanged,
+		badge: globalBadge,
 	});
 
 	menus.setProps({
@@ -73,12 +108,19 @@ const update = () => {
 		isMenuBarVisible,
 		isSideBarVisible,
 		showWindowOnUnreadChanged,
+		webContents,
+	});
+
+	screenSharingModal.setProps({
+		visible: openModal === 'screenSharing',
 	});
 
 	sideBar.setProps({
 		visible: isSideBarVisible,
 		servers,
 		activeServerURL,
+		styles: sideBarStyles,
+		badges,
 	});
 
 	touchBar.setProps({
@@ -89,6 +131,12 @@ const update = () => {
 	trayIcon.setProps({
 		visible: hasTrayIcon,
 		isMainWindowVisible,
+		badge: globalBadge,
+	});
+
+	updateModal.setProps({
+		visible: openModal === 'update',
+		...updateInfo,
 	});
 
 	webview.setProps({
@@ -98,30 +146,67 @@ const update = () => {
 	});
 };
 
+const setSideBarStyle = (serverURL, style) => {
+	sideBarStyles = {
+		...sideBarStyles,
+		[serverURL]: style || null,
+	};
+	update();
+};
 
-const destroyAll = () => {
-	try {
-		const mainWindow = getCurrentWindow();
-		mainWindow.removeListener('hide', update);
-		mainWindow.removeListener('show', update);
-		mainWindow.removeListener('enter-full-screen', update);
-		mainWindow.removeListener('leave-full-screen', update);
-		mainWindow.removeAllListeners();
-	} catch (error) {
-		remote.getGlobal('console').error(error);
-	}
+const setBadge = (serverURL, badge) => {
+	badges = {
+		...badges,
+		[serverURL]: badge || null,
+	};
+	update();
+};
+
+const setOpenModal = (modal) => {
+	openModal = modal;
+	update();
+};
+
+const setUpdateInfo = (props) => {
+	updateInfo = {
+		...updateInfo,
+		...props,
+	};
+	update();
+};
+
+const setWebContents = (newWebContents) => {
+	webContents = newWebContents;
+	update();
+};
+
+const setEditingParams = (newEditingParams) => {
+	editingParams = newEditingParams;
+	update();
+};
+
+const setSpellCheckingCorrections = (newSpellCheckingCorrections) => {
+	spellCheckingCorrections = newSpellCheckingCorrections;
+	update();
+};
+
+const setSpellCheckingDictionaries = (newSpellCheckingDictionaries) => {
+	spellCheckingDictionaries = newSpellCheckingDictionaries;
+	update();
 };
 
 export default () => {
-	window.addEventListener('beforeunload', destroyAll);
-	window.addEventListener('focus', () => {
-		webview.focusActive();
+	window.addEventListener('beforeunload', () => {
+		try {
+			getCurrentWindow().removeAllListeners();
+		} catch (error) {
+			getGlobal('console').error(error);
+		}
 	});
 
-	getCurrentWindow().on('hide', update);
-	getCurrentWindow().on('show', update);
-	getCurrentWindow().on('enter-full-screen', update);
-	getCurrentWindow().on('leave-full-screen', update);
+	window.addEventListener('focus', () => {
+		webContents.focus();
+	});
 
 	aboutModal.setProps({
 		canUpdate: canUpdate(),
@@ -129,7 +214,7 @@ export default () => {
 		canSetAutoUpdate: canSetAutoUpdate(),
 		currentVersion: app.getVersion(),
 		onDismiss: () => {
-			aboutModal.setProps({ visible: false });
+			setOpenModal(null);
 		},
 		onClickCheckForUpdates: () => {
 			checkForUpdates();
@@ -232,9 +317,10 @@ export default () => {
 
 	deepLinks.setProps({
 		onAddHost: async (serverURL) => {
-			ipc.emit('focus');
-			if (servers.hostExists(serverURL)) {
-				servers.setActive(serverURL);
+			mainWindow.activate();
+			const servers = getServers();
+			if (servers.some(({ url }) => url === serverURL)) {
+				setActiveServerURL(serverURL);
 				return;
 			}
 
@@ -252,8 +338,7 @@ export default () => {
 
 			try {
 				await validateServerURL(serverURL);
-				servers.addHost(serverURL);
-				servers.setActive(serverURL);
+				addServer(serverURL);
 			} catch (error) {
 				showErrorBox(t('dialog.addServerError.title'), t('dialog.addServerError.message', { host: serverURL }));
 			}
@@ -262,18 +347,21 @@ export default () => {
 
 	landingView.setProps({});
 
+	mainWindow.setProps({
+		onStateChange: update,
+	});
+
 	menus.setProps({
 		appName: app.getName(),
-		webContents: remote.getCurrentWebContents(),
 		onClickShowAbout: () => {
-			aboutModal.setProps({ visible: true });
+			setOpenModal('about');
 		},
 		onClickQuit: () => {
 			app.quit();
 		},
 		onClickAddNewServer: () => {
 			getCurrentWindow().show();
-			servers.clearActive();
+			setActiveServerURL(null);
 		},
 		onClickUndo: (webContents) => {
 			webContents.undo();
@@ -294,13 +382,13 @@ export default () => {
 			webContents.selectAll();
 		},
 		onClickReload: (webContents) => {
-			if (webContents === remote.getCurrentWebContents()) {
+			if (webContents === getCurrentWebContents()) {
 				return;
 			}
 			webContents.reload();
 		},
 		onClickReloadIgnoringCache: (webContents) => {
-			if (webContents === remote.getCurrentWebContents()) {
+			if (webContents === getCurrentWebContents()) {
 				return;
 			}
 			webContents.reloadIgnoringCache();
@@ -309,15 +397,21 @@ export default () => {
 			certificates.clear();
 		},
 		onClickOpenDevToolsForServer: (webContents) => {
-			if (webContents === remote.getCurrentWebContents()) {
+			if (webContents === getCurrentWebContents()) {
 				return;
 			}
 			webContents.openDevTools();
 		},
 		onClickGoBack: (webContents) => {
+			if (webContents === getCurrentWebContents()) {
+				return;
+			}
 			webContents.goBack();
 		},
 		onClickGoForward: (webContents) => {
+			if (webContents === getCurrentWebContents()) {
+				return;
+			}
 			webContents.goForward();
 		},
 		onToggleTrayIcon: (isEnabled) => {
@@ -333,25 +427,25 @@ export default () => {
 			setPreferences({ isSideBarVisible: isEnabled });
 		},
 		onClickResetZoom: () => {
-			remote.getCurrentWebContents().setZoomLevel(0);
+			getCurrentWebContents().setZoomLevel(0);
 		},
 		onClickZoomIn: () => {
-			const newZoomLevel = Math.min(remote.getCurrentWebContents().getZoomLevel() + 1, 9);
-			remote.getCurrentWebContents().setZoomLevel(newZoomLevel);
+			const newZoomLevel = Math.min(getCurrentWebContents().getZoomLevel() + 1, 9);
+			getCurrentWebContents().setZoomLevel(newZoomLevel);
 		},
 		onClickZoomOut: () => {
-			const newZoomLevel = Math.max(remote.getCurrentWebContents().getZoomLevel() - 1, -9);
-			remote.getCurrentWebContents().setZoomLevel(newZoomLevel);
+			const newZoomLevel = Math.max(getCurrentWebContents().getZoomLevel() - 1, -9);
+			getCurrentWebContents().setZoomLevel(newZoomLevel);
 		},
 		onClickSelectServer: ({ url }) => {
 			getCurrentWindow().show();
-			servers.setActive(url);
+			setActiveServerURL(url);
 		},
 		onClickReloadApp: () => {
-			remote.getCurrentWebContents().reloadIgnoringCache();
+			getCurrentWebContents().reloadIgnoringCache();
 		},
 		onToggleAppDevTools: () => {
-			remote.getCurrentWebContents().toggleDevTools();
+			getCurrentWebContents().toggleDevTools();
 		},
 		onToggleShowWindowOnUnreadChanged: (isEnabled) => {
 			setPreferences({ showWindowOnUnreadChanged: isEnabled });
@@ -387,18 +481,12 @@ export default () => {
 
 	screenSharingModal.setProps({
 		onDismiss: () => {
-			screenSharingModal.setProps({
-				visible: false,
-			});
-
-			ipc.emit('screenshare-result', 'PermissionDeniedError');
+			setOpenModal(null);
+			webContents.send('screenshare-result', 'PermissionDeniedError');
 		},
 		onSelectScreenSharingSource: (id) => {
-			screenSharingModal.setProps({
-				visible: false,
-			});
-
-			ipc.emit('screenshare-result', id);
+			setOpenModal(null);
+			webContents.send('screenshare-result', id);
 		},
 	});
 
@@ -408,19 +496,19 @@ export default () => {
 
 	sideBar.setProps({
 		onClickAddServer: () => {
-			servers.clearActive();
+			setActiveServerURL(null);
 		},
 		onClickServer: (serverURL) => {
-			servers.setActive(serverURL);
+			setActiveServerURL(serverURL);
 		},
 		onClickReloadServer: (serverURL) => {
-			webview.getByUrl(serverURL).reload();
+			webview.reload(serverURL);
 		},
 		onClickRemoveServer: (serverURL) => {
-			servers.removeHost(serverURL);
+			removeServer(serverURL);
 		},
 		onClickOpenDevToolsForServer: (serverURL) => {
-			webview.getByUrl(serverURL).openDevTools();
+			webview.openDevTools(serverURL);
 		},
 		onSortServers: (serverURLs) => {
 			sortServers(serverURLs);
@@ -431,14 +519,17 @@ export default () => {
 
 	touchBar.setProps({
 		onTouchFormattingButton: (buttonClass) => {
-			webview.getActive().executeJavaScript(`
+			if (webContents === getCurrentWebContents()) {
+				return;
+			}
+			webContents.executeJavaScript(`
 				var svg = document.querySelector("button svg[class$='${ buttonClass }']");
 				svg && svg.parentNode.click();
 				`.trim()
 			);
 		},
 		onTouchServer: (serverURL) => {
-			servers.setActive(serverURL);
+			setActiveServerURL(serverURL);
 		},
 	});
 
@@ -460,7 +551,7 @@ export default () => {
 	updateModal.setProps({
 		currentVersion: app.getVersion(),
 		onDismiss: () => {
-			updateModal.setProps({ visible: false });
+			setOpenModal(null);
 		},
 		onSkipUpdateVersion: async (version) => {
 			await showMessageBox({
@@ -471,10 +562,10 @@ export default () => {
 				defaultId: 0,
 			});
 			skipUpdateVersion(version);
-			updateModal.setProps({ visible: false });
+			setOpenModal(null);
 		},
 		onRemindUpdateLater: () => {
-			updateModal.setProps({ visible: false });
+			setOpenModal(null);
 		},
 		onInstallUpdate: async () => {
 			await showMessageBox({
@@ -485,32 +576,27 @@ export default () => {
 				defaultId: 0,
 			});
 			downloadUpdate();
-			updateModal.setProps({ visible: false });
+			setOpenModal(null);
 		},
 	});
 
 	updates.setProps({
 		onCheckingForUpdates: () => {
-			aboutModal.setProps({ isCheckingForUpdate: true });
-			updateModal.setProps({ isCheckingForUpdate: true });
+			setUpdateInfo({ isCheckingForUpdate: true });
 		},
 		onUpdateNotAvailable: () => {
-			const props = {
+			setUpdateInfo({
 				newVersion: undefined,
 				isCheckingForUpdate: false,
 				updateMessage: t('dialog.about.noUpdatesAvailable'),
-			};
-			aboutModal.setProps(props);
-			updateModal.setProps(props);
+			});
 		},
 		onUpdateAvailable: (newVersion) => {
-			const props = {
-				visible: false,
+			setOpenModal('update');
+			setUpdateInfo({
 				newVersion,
 				isCheckingForUpdate: false,
-			};
-			aboutModal.setProps(props);
-			updateModal.setProps(props);
+			});
 		},
 		onUpdateDownloaded: async () => {
 			const { response } = await showMessageBox({
@@ -540,68 +626,52 @@ export default () => {
 			quitAndInstallUpdate();
 		},
 		onError: (error) => {
-			const props = {
+			setUpdateInfo({
 				newVersion: undefined,
 				isCheckingForUpdate: false,
 				updateMessage: t('dialog.about.errorWhileLookingForUpdates'),
-			};
-			aboutModal.setProps(props);
-			updateModal.setProps(props);
+			});
 			reportWarning(error);
 		},
 	});
 
-	let badges = {};
-
-	webview.on('ipc-message-unread-changed', (serverURL, [badge]) => {
-		if (typeof badge === 'number' && localStorage.getItem('showWindowOnUnreadChanged') === 'true') {
-			const mainWindow = remote.getCurrentWindow();
-			if (!mainWindow.isFocused()) {
-				mainWindow.once('focus', () => mainWindow.flashFrame(false));
-				mainWindow.showInactive();
-				mainWindow.flashFrame(true);
-			}
-		}
-
-		badges = {
-			...badges,
-			[serverURL]: badge || null,
-		};
-
-		sideBar.setProps({ badges });
-
-		const mentionCount = Object.values(badges)
-			.filter((badge) => Number.isInteger(badge))
-			.reduce((sum, count) => sum + count, 0);
-		const globalBadge = mentionCount
-			|| (Object.values(badges).some((badge) => !!badge) && '•')
-			|| null;
-
-		trayIcon.setProps({ badge: globalBadge });
-		dock.setProps({ badge: globalBadge });
-	});
-
-	webview.on('ipc-message-title-changed', (hostUrl, [title]) => {
-		servers.setHostTitle(hostUrl, title);
-	});
-
-	webview.on('ipc-message-focus', (hostUrl) => {
-		servers.setActive(hostUrl);
-	});
-
-	let styles = {};
-
-	webview.on('ipc-message-sidebar-style', (hostUrl, [style]) => {
-		styles = {
-			...styles,
-			[hostUrl]: style || null,
-		};
-		sideBar.setProps({ styles });
-	});
-
 	webview.setProps({
+		onBadgeChange: (serverURL, badge) => {
+			setBadge(serverURL, badge);
+		},
+		onBlur: () => {
+			setWebContents(getCurrentWebContents());
+		},
+		onContextMenu: (serverURL, webContents, params) => {
+			setWebContents(webContents);
+			setEditingParams(params);
+			setSpellCheckingCorrections(getSpellCheckingCorrections(params.selectionText));
+			setSpellCheckingDictionaries(getSpellCheckingDictionaries().map((name) => ({
+				name,
+				enabled: getEnabledSpellCheckingDictionaries().includes(name),
+			})));
+			contextMenu.trigger();
+		},
+		onFocus: (serverURL, webContents) => {
+			setWebContents(webContents);
+		},
+		onRequestFocus: (serverURL) => {
+			mainWindow.activate();
+			setActiveServerURL(serverURL);
+			setWebContents(webContents);
+			webContents.focus();
+		},
+		onRequestScreenSharing: () => {
+			setOpenModal('screenSharing');
+		},
+		onSideBarStyleChange: (serverURL, style) => {
+			setSideBarStyle(serverURL, style);
+		},
+		onTitleChange: (serverURL, title) => {
+			setServerProperties(serverURL, { title });
+		},
 		onNavigate: (serverURL, url) => {
-			servers.setLastPath(serverURL, url);
+			setServerProperties(serverURL, { lastPath: url });
 		},
 	});
 };

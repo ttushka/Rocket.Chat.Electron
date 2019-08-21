@@ -85,49 +85,14 @@ class Servers {
 		}
 
 		this._hosts = hosts;
+		this.setActive(this.active);
+
 		const { onUpdate } = props;
 		onUpdate && onUpdate();
 	}
 
 	save() {
 		localStorage.setItem(hostsKey, JSON.stringify(this._hosts));
-	}
-
-	get(hostUrl) {
-		return this.hosts[hostUrl];
-	}
-
-	forEach(cb) {
-		for (const host in this.hosts) {
-			if (this.hosts.hasOwnProperty(host)) {
-				cb(this.hosts[host]);
-			}
-		}
-	}
-
-	async validateHost(hostUrl, timeout = 5000) {
-		const headers = new Headers();
-
-		if (hostUrl.includes('@')) {
-			const url = new URL(hostUrl);
-			hostUrl = url.origin;
-			headers.set('Authorization', `Basic ${ btoa(`${ url.username }:${ url.password }`) }`);
-		}
-
-		const response = await Promise.race([
-			fetch(`${ hostUrl }/api/info`, { headers }),
-			new Promise((resolve, reject) => setTimeout(() => reject('timeout'), timeout)),
-		]);
-
-		if (!response.ok) {
-			throw 'invalid';
-		}
-	}
-
-	hostExists(hostUrl) {
-		const { hosts } = this;
-
-		return !!hosts[hostUrl];
 	}
 
 	addHost(hostUrl) {
@@ -144,7 +109,7 @@ class Servers {
 			password = match[3];
 		}
 
-		if (this.hostExists(hostUrl) === true) {
+		if (this._hosts[hostUrl] === true) {
 			this.setActive(hostUrl);
 			return false;
 		}
@@ -185,7 +150,7 @@ class Servers {
 
 	setActive(hostUrl) {
 		let url;
-		if (this.hostExists(hostUrl)) {
+		if (this._hosts[hostUrl]) {
 			url = hostUrl;
 		} else if (Object.keys(this._hosts).length > 0) {
 			url = Object.keys(this._hosts)[0];
@@ -202,32 +167,11 @@ class Servers {
 		return false;
 	}
 
-	restoreActive() {
-		this.setActive(this.active);
-	}
-
 	clearActive() {
 		localStorage.removeItem(activeKey);
 		const { onUpdate } = props;
 		onUpdate && onUpdate();
 		return true;
-	}
-
-	setHostTitle(serverURL, title) {
-		if (title === 'Rocket.Chat' && /https?:\/\/open\.rocket\.chat/.test(serverURL) === false) {
-			title += ` - ${ serverURL }`;
-		}
-		const { hosts } = this;
-		hosts[serverURL].title = title;
-		this.hosts = hosts;
-		const { onUpdate } = props;
-		onUpdate && onUpdate();
-	}
-
-	setLastPath(serverURL, lastPath) {
-		const { hosts } = this;
-		hosts[serverURL].lastPath = lastPath;
-		this.hosts = hosts;
 	}
 }
 
@@ -245,7 +189,6 @@ const setProps = (partialProps) => {
 	}
 
 	instance.load();
-	instance.restoreActive();
 	mounted = true;
 };
 
@@ -263,6 +206,25 @@ export const getServers = () => {
 
 export const getActiveServerURL = () => instance.active;
 
+export const setActiveServerURL = (serverURL) => instance.setActive(serverURL);
+
+export const setServerProperties = (serverURL, props) => {
+	const server = instance.hosts[serverURL];
+	const newServer = {
+		...server,
+		...props,
+	};
+
+	if (newServer.title === 'Rocket.Chat' && /https?:\/\/open\.rocket\.chat/.test(serverURL) === false) {
+		newServer.title = `${ newServer.title } - ${ serverURL }`;
+	}
+
+	instance.hosts[serverURL] = newServer;
+
+	const { onUpdate } = props;
+	onUpdate && onUpdate();
+};
+
 export const addServer = (serverURL) => {
 	const resolvedServerURL = instance.addHost(serverURL);
 
@@ -275,10 +237,31 @@ export const addServer = (serverURL) => {
 	return resolvedServerURL;
 };
 
+export const removeServer = (serverURL) => {
+	instance.removeHost(serverURL);
+};
+
 export const sortServers = (serverURLs) => {
 	localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(serverURLs));
 	const { onUpdate } = props;
 	onUpdate && onUpdate();
 };
 
-export const validateServerURL = (serverURL) => instance.validateHost(serverURL, 2000);
+export const validateServerURL = async (serverURL, timeout = 2000) => {
+	const headers = new Headers();
+
+	if (serverURL.includes('@')) {
+		const url = new URL(serverURL);
+		serverURL = url.origin;
+		headers.set('Authorization', `Basic ${ btoa(`${ url.username }:${ url.password }`) }`);
+	}
+
+	const response = await Promise.race([
+		fetch(`${ serverURL }/api/info`, { headers }),
+		new Promise((resolve, reject) => setTimeout(() => reject('timeout'), timeout)),
+	]);
+
+	if (!response.ok) {
+		throw 'invalid';
+	}
+};

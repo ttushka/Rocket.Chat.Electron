@@ -114,7 +114,7 @@ const setProps = (partialProps) => {
 
 		section.querySelector('#login-card').addEventListener('submit', handleFormSubmit, false);
 		section.querySelector('#login-card [name="host"]').addEventListener('blur', handleInputBlur, false);
-		section.querySelector('#login-card [name="host"]').addEventListener('change', handleInputChange, false);
+		section.querySelector('#login-card [name="host"]').addEventListener('input', handleInputChange, false);
 
 		document.querySelector('.app-page').classList.remove('app-page--loading');
 	}
