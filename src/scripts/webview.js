@@ -1,26 +1,23 @@
-import { ipcRenderer, remote } from 'electron';
+import { remote } from 'electron';
 import { EventEmitter } from 'events';
-import servers from './servers';
 import screenSharingModal from './screenSharingModal';
 import { spellCheckWords, getSpellCheckingDictionaries, getEnabledSpellCheckingDictionaries, getSpellCheckingCorrections } from './spellChecking';
 import contextMenu from './contextMenu';
 import menus from './menus';
+import ipc from '../ipc';
 
 
 const { getCurrentWebContents } = remote;
+
+let props = {
+	servers: [],
+};
+let servers = [];
 
 class WebView extends EventEmitter {
 	constructor() {
 		super();
 		this.webviewParentElement = document.body;
-	}
-
-	loaded() {
-		document.querySelector('.app-page').classList.remove('app-page--loading');
-	}
-
-	loading() {
-		document.querySelector('.app-page').classList.add('app-page--loading');
 	}
 
 	add(host) {
@@ -37,7 +34,8 @@ class WebView extends EventEmitter {
 
 		webviewObj.addEventListener('did-navigate-in-page', (lastPath) => {
 			if ((lastPath.url).includes(host.url)) {
-				this.saveLastPath(host.url, lastPath.url);
+				const { onNavigate } = props;
+				onNavigate && onNavigate(host.url, lastPath.url);
 			}
 		});
 
@@ -53,13 +51,17 @@ class WebView extends EventEmitter {
 					screenSharingModal.setProps({
 						visible: true,
 					});
+
+					const disconnect = ipc.connect('screenshare-result', (event, id) => {
+						webviewObj.executeJavaScript(`window.parent.postMessage({ sourceId: '${ id }' }, '*');`);
+						disconnect();
+					});
 					break;
 				}
 
 				case 'reload-server': {
 					const webviewObj = this.getByUrl(host.url);
 					const server = webviewObj.getAttribute('server');
-					this.loading();
 					webviewObj.loadURL(server);
 					break;
 				}
@@ -130,12 +132,6 @@ class WebView extends EventEmitter {
 		}
 	}
 
-	saveLastPath(hostUrl, lastPathUrl) {
-		const { hosts } = servers;
-		hosts[hostUrl].lastPath = lastPathUrl;
-		servers.hosts = hosts;
-	}
-
 	getByUrl(hostUrl) {
 		return this.webviewParentElement.querySelector(`webview[server="${ hostUrl }"]`);
 	}
@@ -153,12 +149,6 @@ class WebView extends EventEmitter {
 		while (!(item = this.getActive()) === false) {
 			item.classList.remove('active');
 		}
-		document.querySelector('.landing-view').classList.add('hide');
-	}
-
-	showLanding() {
-		this.loaded();
-		document.querySelector('.landing-view').classList.remove('hide');
 	}
 
 	setActive(hostUrl) {
@@ -209,17 +199,34 @@ class WebView extends EventEmitter {
 
 const instance = new WebView();
 
-export default Object.assign(instance, {
-	setProps: () => {
-		servers.forEach((host) => {
-			instance.add(host);
-		});
+const setProps = (partialProps) => {
+	props = {
+		...props,
+		...partialProps,
+	};
 
-		ipcRenderer.on('screenshare-result', (e, id) => {
-			const webviewObj = instance.getActive();
-			webviewObj.executeJavaScript(`
-				window.parent.postMessage({ sourceId: '${ id }' }, '*');
-			`);
-		});
-	},
+	const {
+		servers: propServers,
+		activeServerURL,
+	} = props;
+
+	const addedServers = propServers.filter(({ url }) => !servers.some((server) => server.url === url));
+	const removedServers = servers.filter(({ url }) => !propServers.some((server) => server.url === url));
+	if (addedServers.length || removedServers.length) {
+		servers = servers.filter((server) => !removedServers.includes(server)).concat(addedServers);
+	}
+
+	addedServers.forEach((server) => {
+		instance.add(server);
+	});
+
+	removedServers.forEach((server) => {
+		instance.remove(server.url);
+	});
+
+	instance.setActive(activeServerURL);
+};
+
+export default Object.assign(instance, {
+	setProps,
 });

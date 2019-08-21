@@ -105,7 +105,7 @@ const setProps = (partialProps) => {
 	}
 
 	trayIcon.removeAllListeners('click');
-	trayIcon.addListener('click', onToggleMainWindow && onToggleMainWindow.bind(null, !isMainWindowVisible));
+	onToggleMainWindow && trayIcon.addListener('click', onToggleMainWindow.bind(null, !isMainWindowVisible));
 
 	const template = createContextMenuTemplate(props);
 	const contextMenu = Menu.buildFromTemplate(template);

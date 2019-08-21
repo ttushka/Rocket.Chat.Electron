@@ -74,31 +74,46 @@ const updatePreferences = () => {
 };
 
 
-const updateServers = () => {
+const update = () => {
+	const isMainWindowVisible = getCurrentWindow().isVisible();
+	const servers = getServers();
+	const activeServerURL = getActiveServerURL();
+
+	landingView.setProps({
+		visible: !activeServerURL,
+	});
+
 	menus.setProps({
-		servers: getServers(),
-		activeServerURL: getActiveServerURL(),
+		servers,
+		activeServerURL,
 	});
 
 	sideBar.setProps({
-		servers: getServers(),
-		activeServerURL: getActiveServerURL(),
+		servers,
+		activeServerURL,
 	});
 
 	touchBar.setProps({
-		servers: getServers(),
-		activeServerURL: getActiveServerURL(),
+		servers,
+		activeServerURL,
+	});
+
+	trayIcon.setProps({
+		isMainWindowVisible,
+	});
+
+	webview.setProps({
+		servers,
+		activeServerURL,
 	});
 };
 
 
-const updateWindowState = () => trayIcon.setProps({ isMainWindowVisible: getCurrentWindow().isVisible() });
-
 const destroyAll = () => {
 	try {
 		const mainWindow = getCurrentWindow();
-		mainWindow.removeListener('hide', updateWindowState);
-		mainWindow.removeListener('show', updateWindowState);
+		mainWindow.removeListener('hide', update);
+		mainWindow.removeListener('show', update);
 		mainWindow.removeAllListeners();
 	} catch (error) {
 		remote.getGlobal('console').error(error);
@@ -111,8 +126,8 @@ export default () => {
 		webview.focusActive();
 	});
 
-	getCurrentWindow().on('hide', updateWindowState);
-	getCurrentWindow().on('show', updateWindowState);
+	getCurrentWindow().on('hide', update);
+	getCurrentWindow().on('show', update);
 
 	aboutModal.setProps({
 		canUpdate: canUpdate(),
@@ -249,9 +264,6 @@ export default () => {
 				showErrorBox(t('dialog.addServerError.title'), t('dialog.addServerError.message', { host: serverURL }));
 			}
 		},
-		onOpenRoom: (...args) => {
-			ipc.emit('open-room', ...args);
-		},
 	});
 
 	landingView.setProps({});
@@ -268,7 +280,6 @@ export default () => {
 		onClickAddNewServer: () => {
 			getCurrentWindow().show();
 			servers.clearActive();
-			webview.showLanding();
 		},
 		onClickUndo: (webContents) => {
 			webContents.undo();
@@ -399,37 +410,12 @@ export default () => {
 	});
 
 	servers.setProps({
-		onServersLoaded: () => {
-			webview.loaded();
-			updateServers();
-		},
-		onServerAdded: (serverURL) => {
-			webview.add(servers.get(serverURL));
-			updateServers();
-		},
-		onServerRemoved: (serverURL) => {
-			webview.remove(serverURL);
-			servers.clearActive();
-			webview.showLanding();
-			updateServers();
-		},
-		onActiveSetted: (serverURL) => {
-			webview.setActive(serverURL);
-			updateServers();
-		},
-		onActiveCleared: () => {
-			webview.deactiveAll();
-			updateServers();
-		},
-		onTitleSetted: () => {
-			updateServers();
-		},
+		onUpdate: update,
 	});
 
 	sideBar.setProps({
 		onClickAddServer: () => {
 			servers.clearActive();
-			webview.showLanding();
 		},
 		onClickServer: (serverURL) => {
 			servers.setActive(serverURL);
@@ -445,7 +431,6 @@ export default () => {
 		},
 		onSortServers: (serverURLs) => {
 			sortServers(serverURLs);
-			updateServers();
 		},
 	});
 
@@ -629,9 +614,11 @@ export default () => {
 		webview.setSidebarPaddingEnabled(!hasSidebar);
 	});
 
-	webview.setProps({});
+	webview.setProps({
+		onNavigate: (serverURL, url) => {
+			servers.setLastPath(serverURL, url);
+		},
+	});
 
 	updatePreferences();
-	updateServers();
-	updateWindowState();
 };

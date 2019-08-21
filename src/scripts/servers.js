@@ -6,9 +6,7 @@ const hostsKey = 'rocket.chat.hosts';
 const activeKey = 'rocket.chat.currentHost';
 
 let props = {
-	onActiveSetted: null,
-	onActiveCleared: null,
-	onTitleSetted: null,
+	onUpdate: null,
 };
 
 class Servers {
@@ -87,8 +85,8 @@ class Servers {
 		}
 
 		this._hosts = hosts;
-		const { onServersLoaded } = props;
-		onServersLoaded && onServersLoaded();
+		const { onUpdate } = props;
+		onUpdate && onUpdate();
 	}
 
 	save() {
@@ -160,8 +158,8 @@ class Servers {
 		};
 		this.hosts = hosts;
 
-		const { onServerAdded } = props;
-		onServerAdded && onServerAdded(hostUrl);
+		const { onUpdate } = props;
+		onUpdate && onUpdate(hostUrl);
 
 		return hostUrl;
 	}
@@ -175,8 +173,8 @@ class Servers {
 			if (this.active === hostUrl) {
 				this.clearActive();
 			}
-			const { onServerRemoved } = props;
-			onServerRemoved && onServerRemoved(hostUrl);
+			const { onUpdate } = props;
+			onUpdate && onUpdate(hostUrl);
 		}
 	}
 
@@ -195,12 +193,12 @@ class Servers {
 
 		if (url) {
 			localStorage.setItem(activeKey, hostUrl);
-			const { onActiveSetted } = props;
-			onActiveSetted && onActiveSetted(url);
+			const { onUpdate } = props;
+			onUpdate && onUpdate(url);
 			return true;
 		}
-		const { onServersLoaded } = props;
-		onServersLoaded && onServersLoaded();
+		const { onUpdate } = props;
+		onUpdate && onUpdate();
 		return false;
 	}
 
@@ -210,8 +208,8 @@ class Servers {
 
 	clearActive() {
 		localStorage.removeItem(activeKey);
-		const { onActiveCleared } = props;
-		onActiveCleared && onActiveCleared();
+		const { onUpdate } = props;
+		onUpdate && onUpdate();
 		return true;
 	}
 
@@ -222,8 +220,14 @@ class Servers {
 		const { hosts } = this;
 		hosts[serverURL].title = title;
 		this.hosts = hosts;
-		const { onTitleSetted } = props;
-		onTitleSetted && onTitleSetted(serverURL, title);
+		const { onUpdate } = props;
+		onUpdate && onUpdate();
+	}
+
+	setLastPath(serverURL, lastPath) {
+		const { hosts } = this;
+		hosts[serverURL].lastPath = lastPath;
+		this.hosts = hosts;
 	}
 }
 
@@ -273,6 +277,8 @@ export const addServer = (serverURL) => {
 
 export const sortServers = (serverURLs) => {
 	localStorage.setItem('rocket.chat.sortOrder', JSON.stringify(serverURLs));
+	const { onUpdate } = props;
+	onUpdate && onUpdate();
 };
 
 export const validateServerURL = (serverURL) => instance.validateHost(serverURL, 2000);

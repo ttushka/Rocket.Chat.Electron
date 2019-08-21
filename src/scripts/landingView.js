@@ -5,6 +5,7 @@ import { addServer, validateServerURL } from './servers';
 const defaultServerURL = 'https://open.rocket.chat';
 
 let props = {
+	visible: true,
 	isOffline: false,
 	serverURL: '',
 	isValidating: false,
@@ -114,9 +115,12 @@ const setProps = (partialProps) => {
 		section.querySelector('#login-card').addEventListener('submit', handleFormSubmit, false);
 		section.querySelector('#login-card [name="host"]').addEventListener('blur', handleInputBlur, false);
 		section.querySelector('#login-card [name="host"]').addEventListener('change', handleInputChange, false);
+
+		document.querySelector('.app-page').classList.remove('app-page--loading');
 	}
 
 	const {
+		visible,
 		isOffline,
 		serverURL,
 		isValidating,
@@ -140,6 +144,8 @@ const setProps = (partialProps) => {
 	section.querySelector('#login-card .login').innerText =
 		isValidating ? t('landing.validating') : t('landing.connect');
 	section.querySelector('#login-card .login').toggleAttribute('disabled', isValidating);
+
+	document.querySelector('.landing-view').classList.toggle('hide', !visible);
 };
 
 export default {
