@@ -1,16 +1,17 @@
 import { t } from 'i18next';
-import { addServer, validateServerURL } from './servers';
 
 
 const defaultServerURL = 'https://open.rocket.chat';
 
 let props = {
 	visible: true,
-	isOffline: false,
-	serverURL: '',
-	isValidating: false,
-	errorMessage: '',
+	addServer: null,
+	validateServerURL: null,
 };
+let offline = false;
+let serverURL = '';
+let errorMessage = '';
+let validating = false;
 let section;
 
 const setProps = (partialProps) => {
@@ -19,16 +20,30 @@ const setProps = (partialProps) => {
 		...partialProps,
 	};
 
-	const setOffline = (isOffline) => setProps({ isOffline });
-	const setServerURL = (serverURL) => setProps({ serverURL });
-	const setErrorMessage = (errorMessage) => setProps({ errorMessage });
-	const setValidating = (isValidating) => setProps({ isValidating });
+	const setOffline = (newOffline) => {
+		offline = newOffline;
+		setProps({});
+	};
+
+	const setServerURL = (newServerURL) => {
+		serverURL = newServerURL;
+		setProps({});
+	};
+
+	const setErrorMessage = (newErrorMessage) => {
+		errorMessage = newErrorMessage;
+		setProps({});
+	};
+
+	const setValidating = (newValidating) => {
+		validating = newValidating;
+		setProps({});
+	};
 
 	if (!section) {
 		section = document.querySelector('.landing-view');
 
 		const tryValidation = (resolve, reject) => {
-			let { serverURL } = props;
 			serverURL = serverURL.trim();
 
 			setServerURL(serverURL);
@@ -41,6 +56,8 @@ const setProps = (partialProps) => {
 			}
 
 			setValidating(true);
+
+			const { validateServerURL } = props;
 
 			validateServerURL(serverURL)
 				.then(() => {
@@ -93,7 +110,7 @@ const setProps = (partialProps) => {
 
 			await validate();
 
-			const { serverURL } = props;
+			const { addServer } = props;
 
 			addServer(serverURL || defaultServerURL);
 
@@ -119,15 +136,9 @@ const setProps = (partialProps) => {
 		document.querySelector('.app-page').classList.remove('app-page--loading');
 	}
 
-	const {
-		visible,
-		isOffline,
-		serverURL,
-		isValidating,
-		errorMessage,
-	} = props;
+	const { visible } = props;
 
-	document.body.classList.toggle('offline', isOffline);
+	document.body.classList.toggle('offline', offline);
 
 	section.querySelector('#login-card .connect__prompt').innerText =
 		errorMessage ? t('landing.invalidUrl') : t('landing.inputUrl');
@@ -142,8 +153,8 @@ const setProps = (partialProps) => {
 	section.querySelector('#login-card .connect__error').innerText = t('error.offline');
 
 	section.querySelector('#login-card .login').innerText =
-		isValidating ? t('landing.validating') : t('landing.connect');
-	section.querySelector('#login-card .login').toggleAttribute('disabled', isValidating);
+		validating ? t('landing.validating') : t('landing.connect');
+	section.querySelector('#login-card .login').toggleAttribute('disabled', validating);
 
 	document.querySelector('.landing-view').classList.toggle('hide', !visible);
 };

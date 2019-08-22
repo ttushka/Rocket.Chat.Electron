@@ -8,7 +8,7 @@ let props = {
 	canUpdate: false,
 	canAutoUpdate: false,
 	canSetAutoUpdate: false,
-	isCheckingForUpdate: false,
+	isCheckingForUpdates: false,
 	updateMessage: '',
 };
 let dialog;
@@ -61,7 +61,7 @@ const setProps = (partialProps) => {
 		canUpdate,
 		canAutoUpdate,
 		canSetAutoUpdate,
-		isCheckingForUpdate,
+		isCheckingForUpdates,
 		updateMessage,
 	} = props;
 
@@ -82,12 +82,12 @@ const setProps = (partialProps) => {
 	dialog.querySelector('.check-for-updates-on-start').toggleAttribute('checked', canAutoUpdate);
 	dialog.querySelector('.check-for-updates-on-start').toggleAttribute('disabled', !canSetAutoUpdate);
 
-	dialog.querySelector('.check-for-updates').toggleAttribute('disabled', isCheckingForUpdate);
-	dialog.querySelector('.check-for-updates').classList.toggle('hidden', isCheckingForUpdate || updateMessage);
-	dialog.querySelector('.checking-for-updates').classList.toggle('hidden', !isCheckingForUpdate && !updateMessage);
+	dialog.querySelector('.check-for-updates').toggleAttribute('disabled', isCheckingForUpdates);
+	dialog.querySelector('.check-for-updates').classList.toggle('hidden', isCheckingForUpdates || updateMessage);
+	dialog.querySelector('.checking-for-updates').classList.toggle('hidden', !isCheckingForUpdates && !updateMessage);
 
 	dialog.querySelector('.checking-for-updates .message').innerText = updateMessage;
-	dialog.querySelector('.checking-for-updates').classList.toggle('message-shown', !isCheckingForUpdate && updateMessage);
+	dialog.querySelector('.checking-for-updates').classList.toggle('message-shown', !isCheckingForUpdates && updateMessage);
 
 	if (updateMessage && !prevProps.updateMessage) {
 		messageTimer = setTimeout(() => {
