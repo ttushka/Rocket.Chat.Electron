@@ -19,9 +19,19 @@ import spellChecking, { getSpellCheckingCorrections, getSpellCheckingDictionarie
 import { reportError } from '../../errorHandling';
 import { requestAppDataReset } from '../userData';
 import deepLinks from '../deepLinks';
-import { PreferencesProvider, usePreferences, useMergePreferences } from './PreferencesProvider';
-import { ServersProvider, useServers, useActiveServer, useServersActions, useServerValidation } from './ServersProvider';
-import { BasicAuthentication } from './BasicAuthentication';
+import {
+	PreferencesProvider,
+	usePreferences,
+	useMergePreferences,
+} from './services/PreferencesProvider';
+import {
+	ServersProvider,
+	useServers,
+	useActiveServer,
+	useServersActions,
+	useServerValidation,
+} from './services/ServersProvider';
+import { BasicAuthentication } from './services/BasicAuthentication';
 import {
 	AutoUpdaterHandler,
 	useAutoUpdaterState,
@@ -32,7 +42,7 @@ import {
 	CertificatesHandler,
 	useCertificateTrustRequestHandler,
 	useClearCertificates,
-} from './CertificatesHandler';
+} from './services/CertificatesHandler';
 
 
 const { app, getCurrentWebContents, getCurrentWindow } = remote;

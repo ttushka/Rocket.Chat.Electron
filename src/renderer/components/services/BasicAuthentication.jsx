@@ -1,6 +1,6 @@
 import { remote } from 'electron';
 import { useServers } from './ServersProvider';
-import { useEventListener } from '../hooks/useEventListener';
+import { useEventListener } from '../../hooks/useEventListener';
 
 
 const { app } = remote;

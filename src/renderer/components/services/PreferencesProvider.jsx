@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { reportError } from '../../errorHandling';
+import { reportError } from '../../../errorHandling';
 
 
 const initialPreferences = {

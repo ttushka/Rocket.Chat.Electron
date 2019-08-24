@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { parse as parseURL, format as formatURL } from 'url';
-import { reportError } from '../../errorHandling';
-import { readUserDataFile, readAppDataFile } from '../userData';
+import { reportError } from '../../../errorHandling';
+import { readUserDataFile, readAppDataFile } from '../../userData';
 
 
 const serversFileName = 'servers.json';

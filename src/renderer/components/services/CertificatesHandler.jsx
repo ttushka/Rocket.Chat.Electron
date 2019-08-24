@@ -1,9 +1,9 @@
 import { remote } from 'electron';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { parse as parseURL } from 'url';
-import { reportError } from '../../errorHandling';
-import { readUserDataFile, writeUserDataFile } from '../userData';
-import { useEventListener } from '../hooks/useEventListener';
+import { reportError } from '../../../errorHandling';
+import { readUserDataFile, writeUserDataFile } from '../../userData';
+import { useEventListener } from '../../hooks/useEventListener';
 
 
 const { app } = remote;
