@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { remote } from 'electron';
 import { EventEmitter } from 'events';
-import { reportError, reportWarning } from '../../errorHandling';
-import { useEventEmitter } from '../hooks/useEventEmitter';
-import { useEventListener } from '../hooks/useEventListener';
-import { readAppDataFile, readUserDataFile, writeUserDataFile } from '../userData';
+import { reportError, reportWarning } from '../../../errorHandling';
+import { useEventEmitter } from '../../hooks/useEventEmitter';
+import { useEventListener } from '../../hooks/useEventListener';
+import { readAppDataFile, readUserDataFile, writeUserDataFile } from '../../userData';
 
 
 const { autoUpdater } = remote.require('electron-updater');

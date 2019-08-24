@@ -170,8 +170,8 @@ class SpellCheck {
 
 const spellchecking = new SpellCheck();
 
-const setupSpellChecking = () => {
-	spellchecking.load();
+export const setupSpellChecking = async () => {
+	await spellchecking.load();
 };
 
 export const spellCheckWords = (words, callback) => callback(words.filter((word) => !spellchecking.checker(word)));
@@ -195,18 +195,3 @@ export const setSpellCheckingDictionaryEnabled = (dictionaryName, isEnabled) => 
 };
 
 export const getSpellCheckingDictionariesPath = () => spellchecking.dictionariesPath;
-
-
-let mounted = false;
-const setProps = () => {
-	if (mounted) {
-		return;
-	}
-
-	setupSpellChecking();
-	mounted = true;
-};
-
-export default {
-	setProps,
-};

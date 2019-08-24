@@ -5,7 +5,7 @@ import { useEventListener } from '../../hooks/useEventListener';
 
 const { app } = remote;
 
-export function BasicAuthentication() {
+export function BasicAuthenticationHandler() {
 	const servers = useServers();
 
 	const handleLogin = (event, webContents, request, authInfo, callback) => {

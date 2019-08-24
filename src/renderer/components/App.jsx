@@ -3,9 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { LoadingSplash } from './LoadingSplash';
 import { showMessageBox, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
-import spellChecking from '../spellChecking';
 import { requestAppDataReset } from '../userData';
-import deepLinks from '../deepLinks';
 import {
 	PreferencesProvider,
 	usePreferences,
@@ -18,13 +16,13 @@ import {
 	useServersActions,
 	useServerValidation,
 } from './services/ServersProvider';
-import { BasicAuthentication } from './services/BasicAuthentication';
+import { BasicAuthenticationHandler } from './services/BasicAuthenticationHandler';
 import {
 	AutoUpdaterHandler,
 	useAutoUpdaterState,
 	useAutoUpdaterActions,
 	useAutoUpdaterEvent,
-} from './AutoUpdaterHandler';
+} from './services/AutoUpdaterHandler';
 import {
 	CertificatesHandler,
 	useCertificateTrustRequestHandler,
@@ -49,6 +47,10 @@ import {
 import { MenuBar } from './MenuBar';
 import { TouchBar } from './TouchBar';
 import { TrayIcon } from './TrayIcon';
+import {
+	DeepLinkingHandler,
+	useDeepLinkingEvent,
+} from './services/DeepLinkingHandler';
 
 
 const { app, getCurrentWebContents, getCurrentWindow } = remote;
@@ -155,39 +157,6 @@ function AppInner() {
 		};
 	}, [webContents]);
 
-	useEffect(() => {
-		deepLinks.setProps({
-			onAddHost: async (serverURL) => {
-				activateMainWindow();
-				if (servers.some(({ url }) => url === serverURL)) {
-					setActiveServerURL(serverURL);
-					return;
-				}
-
-				const { response } = await showMessageBox({
-					type: 'question',
-					buttons: [t('dialog.addServer.add'), t('dialog.addServer.cancel')],
-					defaultId: 0,
-					title: t('dialog.addServer.title'),
-					message: t('dialog.addServer.message', { host: serverURL }),
-				});
-
-				if (response !== 0) {
-					return;
-				}
-
-				try {
-					await validateServerURL(serverURL);
-					addServer(serverURL);
-				} catch (error) {
-					showErrorBox(t('dialog.addServerError.title'), t('dialog.addServerError.message', { host: serverURL }));
-				}
-			},
-		});
-
-		spellChecking.setProps({});
-	});
-
 	useAutoUpdaterEvent('update-available', () => {
 		setOpenModal('update');
 	});
@@ -226,6 +195,33 @@ function AppInner() {
 
 	useAutoUpdaterEvent('error', () => {
 		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
+	});
+
+	useDeepLinkingEvent('add-server', async (serverURL) => {
+		activateMainWindow();
+		if (servers.some(({ url }) => url === serverURL)) {
+			setActiveServerURL(serverURL);
+			return;
+		}
+
+		const { response } = await showMessageBox({
+			type: 'question',
+			buttons: [t('dialog.addServer.add'), t('dialog.addServer.cancel')],
+			defaultId: 0,
+			title: t('dialog.addServer.title'),
+			message: t('dialog.addServer.message', { host: serverURL }),
+		});
+
+		if (response !== 0) {
+			return;
+		}
+
+		try {
+			await validateServerURL(serverURL);
+			addServer(serverURL);
+		} catch (error) {
+			showErrorBox(t('dialog.addServerError.title'), t('dialog.addServerError.message', { host: serverURL }));
+		}
 	});
 
 	const reloadWebView = useReloadWebView();
@@ -556,8 +552,10 @@ export function App() {
 				<ServersProvider>
 					<AutoUpdaterHandler>
 						<CertificatesHandler>
-							<BasicAuthentication />
-							<AppInner />
+							<DeepLinkingHandler>
+								<BasicAuthenticationHandler />
+								<AppInner />
+							</DeepLinkingHandler>
 						</CertificatesHandler>
 					</AutoUpdaterHandler>
 				</ServersProvider>

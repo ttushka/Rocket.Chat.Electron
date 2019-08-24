@@ -8,6 +8,7 @@ import {
 	getSpellCheckingDictionariesPath,
 	installSpellCheckingDictionaries,
 	setSpellCheckingDictionaryEnabled,
+	setupSpellChecking,
 } from '../spellChecking';
 import { showOpenDialog, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
@@ -24,83 +25,89 @@ export const useReloadWebView = () => webview.reload;
 
 export const useOpenDevToolsForWebView = () => webview.openDevTools;
 
-export function WebViewsView(props) {
-	const { t } = useTranslation();
+export const WebViewsView = React.lazy(async () => {
+	await setupSpellChecking();
 
-	useEffect(() => {
-		webview.setProps({
-			...props,
-			onContextMenu: (serverURL, webContents, params) => {
-				contextMenu.setProps({
-					webContents,
-					...params,
-					spellCheckingCorrections: getSpellCheckingCorrections(params.selectionText),
-					spellCheckingDictionaries: getSpellCheckingDictionaries().map((name) => ({
-						name,
-						enabled: getEnabledSpellCheckingDictionaries().includes(name),
-					})),
-					onClickReplaceMispelling: (webContents, correction) => {
-						webContents.replaceMisspelling(correction);
-					},
-					onToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
-						setSpellCheckingDictionaryEnabled(name, isEnabled);
-					},
-					onClickBrowseForSpellCheckLanguage: async () => {
-						const { filePaths } = await showOpenDialog({
-							title: t('dialog.loadDictionary.title'),
-							defaultPath: getSpellCheckingDictionariesPath(),
-							filters: [
-								{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
-								{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
-							],
-							properties: ['openFile', 'multiSelections'],
-						});
+	function WebViewsView(props) {
+		const { t } = useTranslation();
 
-						try {
-							await installSpellCheckingDictionaries(filePaths);
-						} catch (error) {
-							reportError(error);
-							showErrorBox(
-								t('dialog.loadDictionaryError.title'),
-								t('dialog.loadDictionaryError.message', { message: error.message })
-							);
-						}
-					},
-					onClickSaveImageAs: (webContents, url) => {
-						webContents.downloadURL(url);
-					},
-					onClickOpenLink: (webContents, url) => {
-						shell.openExternal(url);
-					},
-					onClickCopyLinkText: (webContents, url, text) => {
-						clipboard.write({ text, bookmark: text });
-					},
-					onClickCopyLinkAddress: (webContents, url, text) => {
-						clipboard.write({ text: url, bookmark: text });
-					},
-					onClickUndo: (webContents) => {
-						webContents.undo();
-					},
-					onClickRedo: (webContents) => {
-						webContents.redo();
-					},
-					onClickCut: (webContents) => {
-						webContents.cut();
-					},
-					onClickCopy: (webContents) => {
-						webContents.copy();
-					},
-					onClickPaste: (webContents) => {
-						webContents.paste();
-					},
-					onClickSelectAll: (webContents) => {
-						webContents.selectAll();
-					},
-				});
-				contextMenu.trigger();
-			},
+		useEffect(() => {
+			webview.setProps({
+				...props,
+				onContextMenu: (serverURL, webContents, params) => {
+					contextMenu.setProps({
+						webContents,
+						...params,
+						spellCheckingCorrections: getSpellCheckingCorrections(params.selectionText),
+						spellCheckingDictionaries: getSpellCheckingDictionaries().map((name) => ({
+							name,
+							enabled: getEnabledSpellCheckingDictionaries().includes(name),
+						})),
+						onClickReplaceMispelling: (webContents, correction) => {
+							webContents.replaceMisspelling(correction);
+						},
+						onToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
+							setSpellCheckingDictionaryEnabled(name, isEnabled);
+						},
+						onClickBrowseForSpellCheckLanguage: async () => {
+							const { filePaths } = await showOpenDialog({
+								title: t('dialog.loadDictionary.title'),
+								defaultPath: getSpellCheckingDictionariesPath(),
+								filters: [
+									{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
+									{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
+								],
+								properties: ['openFile', 'multiSelections'],
+							});
+
+							try {
+								await installSpellCheckingDictionaries(filePaths);
+							} catch (error) {
+								reportError(error);
+								showErrorBox(
+									t('dialog.loadDictionaryError.title'),
+									t('dialog.loadDictionaryError.message', { message: error.message })
+								);
+							}
+						},
+						onClickSaveImageAs: (webContents, url) => {
+							webContents.downloadURL(url);
+						},
+						onClickOpenLink: (webContents, url) => {
+							shell.openExternal(url);
+						},
+						onClickCopyLinkText: (webContents, url, text) => {
+							clipboard.write({ text, bookmark: text });
+						},
+						onClickCopyLinkAddress: (webContents, url, text) => {
+							clipboard.write({ text: url, bookmark: text });
+						},
+						onClickUndo: (webContents) => {
+							webContents.undo();
+						},
+						onClickRedo: (webContents) => {
+							webContents.redo();
+						},
+						onClickCut: (webContents) => {
+							webContents.cut();
+						},
+						onClickCopy: (webContents) => {
+							webContents.copy();
+						},
+						onClickPaste: (webContents) => {
+							webContents.paste();
+						},
+						onClickSelectAll: (webContents) => {
+							webContents.selectAll();
+						},
+					});
+					contextMenu.trigger();
+				},
+			});
 		});
-	});
 
-	return <Markup />;
-}
+		return <Markup />;
+	}
+
+	return { default: WebViewsView };
+});
