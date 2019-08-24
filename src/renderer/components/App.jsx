@@ -1,22 +1,9 @@
-import { remote, shell, clipboard } from 'electron';
+import { remote, shell } from 'electron';
 import React, { useEffect, useMemo, useState } from 'react';
 import { LoadingSplash } from './LoadingSplash';
-import aboutModal from '../aboutModal';
-import contextMenu from '../contextMenu';
-import dock from '../dock';
-import landingView from '../landingView';
-import mainWindow from '../mainWindow';
-import menus from '../menus';
-import screenSharingModal from '../screenSharingModal';
-import sideBar from '../sideBar';
-import touchBar from '../touchBar';
-import trayIcon from '../trayIcon';
-import updateModal from '../updateModal';
-import webview from '../webview';
-import { showMessageBox, showOpenDialog, showErrorBox } from '../dialogs';
+import { showMessageBox, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
-import spellChecking, { getSpellCheckingCorrections, getSpellCheckingDictionaries, getEnabledSpellCheckingDictionaries, setSpellCheckingDictionaryEnabled, getSpellCheckingDictionariesPath, installSpellCheckingDictionaries } from '../spellChecking';
-import { reportError } from '../../errorHandling';
+import spellChecking from '../spellChecking';
 import { requestAppDataReset } from '../userData';
 import deepLinks from '../deepLinks';
 import {
@@ -43,128 +30,28 @@ import {
 	useCertificateTrustRequestHandler,
 	useClearCertificates,
 } from './services/CertificatesHandler';
+import { SideBar } from './SideBar';
+import { DragBar } from './DragBar.styles';
+import { LandingView } from './LandingView';
+import {
+	WebViewsView,
+	useOpenDevToolsForWebView,
+	useReloadWebView,
+} from './WebViewsView';
+import { AboutModal } from './AboutModal';
+import { UpdateModal } from './UpdateModal';
+import { ScreenSharingModal } from './ScreenSharingModal';
+import { Dock } from './Dock';
+import {
+	MainWindow,
+	useActivateMainWindow,
+} from './MainWindow';
+import { MenuBar } from './MenuBar';
+import { TouchBar } from './TouchBar';
+import { TrayIcon } from './TrayIcon';
 
 
 const { app, getCurrentWebContents, getCurrentWindow } = remote;
-
-function AppMarkup() {
-	return <>
-		<div className='sidebar sidebar--hidden'>
-			<div className='sidebar__inner'>
-				<ol className='sidebar__list sidebar__server-list'>
-				</ol>
-				<button className='sidebar__action sidebar__add-server' data-tooltip='Add server'>
-					<span className='sidebar__action-label'>+</span>
-				</button>
-			</div>
-		</div>
-
-		<section className='landing-view'>
-			<div className='wrapper'>
-				<header>
-					<img className='logo' src='./images/logo-dark.svg' />
-				</header>
-
-				<div className='loading-indicator'>
-					<span className='dot'></span>
-					<span className='dot'></span>
-					<span className='dot'></span>
-				</div>
-
-				<form id='login-card' method='/'>
-					<header>
-						<h2 className='connect__prompt'>Enter your server URL</h2>
-					</header>
-					<div className='fields'>
-						<div className='input-text active'>
-							<input type='text' name='host' placeholder='https://open.rocket.chat' dir='auto' />
-						</div>
-					</div>
-
-					<div id='invalidUrl' style={{ display: 'none' }} className='alert alert-danger'>No valid server found</div>
-
-					<div className='connect__error alert alert-danger only-offline'>Check connection</div>
-
-					<div className='submit'>
-						<button type='submit' data-loading-text='Connecting...' className='button primary login'>Connect</button>
-					</div>
-				</form>
-			</div>
-		</section>
-
-		<dialog className='about-modal'>
-			<section className='app-info'>
-				<div className='app-logo'>
-					<img src='./images/logo.svg' />
-				</div>
-				<div className='app-version'>
-				Version <span className='version'>%s</span>
-				</div>
-			</section>
-
-			<section className='updates hidden'>
-				<button className='check-for-updates button primary'>
-				Check for Updates
-				</button>
-
-				<div className='checking-for-updates hidden'>
-					<span className='dot'></span>
-					<span className='dot'></span>
-					<span className='dot'></span>
-					<span className='message'></span>
-				</div>
-
-				<label className='check-for-updates-on-start__label'>
-					<input className='check-for-updates-on-start' type='checkbox' defaultChecked /> <span>Check for Updates on Start</span>
-				</label>
-			</section>
-
-			<div className='copyright'></div>
-		</dialog>
-
-		<dialog className='update-modal'>
-			<div className='update-content'>
-				<h1 className='update-title'>New Update is Available</h1>
-				<p className='update-message'>A new version of the Rocket.Chat Desktop App is available!</p>
-
-				<div className='update-info'>
-					<div className='app-version current-version'>
-						<div className='app-version-label'>Current Version:</div>
-						<div className='app-version-value'>a.b.c</div>
-					</div>
-					<div className='update-arrow'>&rarr;</div>
-					<div className='app-version new-version'>
-						<div className='app-version-label'>New Version:</div>
-						<div className='app-version-value'>x.y.z</div>
-					</div>
-				</div>
-			</div>
-
-			<div className='update-actions'>
-				<button className='update-skip-action button secondary'>Skip This Version</button>
-				<button className='update-remind-action button secondary'>Remind Me Later</button>
-				<button className='update-install-action button primary'>Install Update</button>
-			</div>
-		</dialog>
-
-		<dialog className='screen-sharing-modal'>
-			<template className='screenshare-source-template'>
-				<div className='screenshare-source'>
-					<div className='screenshare-source-thumbnail'>
-						<img src='' alt='' />
-					</div>
-					<div className='screenshare-source-name'></div>
-				</div>
-			</template>
-			<h1 className='screenshare-title'>Select a screen to share</h1>
-			<div className='screenshare-sources'></div>
-		</dialog>
-
-		<div className="webviews" />
-
-		<div className='drag-region'></div>
-	</>;
-}
 
 function AppInner() {
 	const { t } = useTranslation();
@@ -221,9 +108,6 @@ function AppInner() {
 	const [badges, setBadges] = useState({});
 	const [openModal, setOpenModal] = useState(null);
 	const [webContents, setWebContents] = useState(getCurrentWebContents());
-	const [editingParams, setEditingParams] = useState({});
-	const [spellCheckingCorrections, setSpellCheckingCorrections] = useState([]);
-	const [spellCheckingDictionaries, setSpellCheckingDictionaries] = useState([]);
 
 	const [, _update] = useState(0);
 	const update = () => _update((count) => count + 1);
@@ -258,6 +142,8 @@ function AppInner() {
 
 	const clearCertificates = useClearCertificates();
 
+	const activateMainWindow = useActivateMainWindow();
+
 	useEffect(() => {
 		const handleFocus = () => {
 			webContents.focus();
@@ -270,100 +156,9 @@ function AppInner() {
 	}, [webContents]);
 
 	useEffect(() => {
-		aboutModal.setProps({
-			visible: openModal === 'about',
-			canUpdate,
-			canAutoUpdate: doesCheckForUpdatesOnStart,
-			canSetAutoUpdate: canSetCheckForUpdatesOnStart,
-			currentVersion: app.getVersion(),
-			isCheckingForUpdates,
-			updateMessage,
-			onDismiss: () => {
-				setOpenModal(null);
-			},
-			onClickCheckForUpdates: () => {
-				if (!canUpdate || isCheckingForUpdates) {
-					return;
-				}
-
-				checkForUpdates();
-			},
-			onToggleCheckForUpdatesOnStart: (isEnabled) => {
-				if (!canSetCheckForUpdatesOnStart) {
-					return;
-				}
-
-				setCheckForUpdatesOnStart(isEnabled);
-			},
-		});
-
-		contextMenu.setProps({
-			webContents,
-			...editingParams,
-			spellCheckingCorrections,
-			spellCheckingDictionaries,
-			onClickReplaceMispelling: (webContents, correction) => {
-				webContents.replaceMisspelling(correction);
-			},
-			onToggleSpellCheckingDictionary: (webContents, name, isEnabled) => {
-				setSpellCheckingDictionaryEnabled(name, isEnabled);
-			},
-			onClickBrowseForSpellCheckLanguage: async () => {
-				const { filePaths } = await showOpenDialog({
-					title: t('dialog.loadDictionary.title'),
-					defaultPath: getSpellCheckingDictionariesPath(),
-					filters: [
-						{ name: t('dialog.loadDictionary.dictionaries'), extensions: ['aff', 'dic'] },
-						{ name: t('dialog.loadDictionary.allFiles'), extensions: ['*'] },
-					],
-					properties: ['openFile', 'multiSelections'],
-				});
-
-				try {
-					await installSpellCheckingDictionaries(filePaths);
-				} catch (error) {
-					reportError(error);
-					showErrorBox(
-						t('dialog.loadDictionaryError.title'),
-						t('dialog.loadDictionaryError.message', { message: error.message })
-					);
-				}
-			},
-			onClickSaveImageAs: (webContents, url) => {
-				webContents.downloadURL(url);
-			},
-			onClickOpenLink: (webContents, url) => {
-				shell.openExternal(url);
-			},
-			onClickCopyLinkText: (webContents, url, text) => {
-				clipboard.write({ text, bookmark: text });
-			},
-			onClickCopyLinkAddress: (webContents, url, text) => {
-				clipboard.write({ text: url, bookmark: text });
-			},
-			onClickUndo: (webContents) => {
-				webContents.undo();
-			},
-			onClickRedo: (webContents) => {
-				webContents.redo();
-			},
-			onClickCut: (webContents) => {
-				webContents.cut();
-			},
-			onClickCopy: (webContents) => {
-				webContents.copy();
-			},
-			onClickPaste: (webContents) => {
-				webContents.paste();
-			},
-			onClickSelectAll: (webContents) => {
-				webContents.selectAll();
-			},
-		});
-
 		deepLinks.setProps({
 			onAddHost: async (serverURL) => {
-				mainWindow.activate();
+				activateMainWindow();
 				if (servers.some(({ url }) => url === serverURL)) {
 					setActiveServerURL(serverURL);
 					return;
@@ -390,314 +185,7 @@ function AppInner() {
 			},
 		});
 
-		dock.setProps({
-			hasTrayIcon,
-			badge: globalBadge,
-		});
-
-		landingView.setProps({
-			visible: !activeServerURL,
-			addServer,
-			validateServerURL,
-		});
-
-		mainWindow.setProps({
-			hasTrayIcon,
-			showWindowOnUnreadChanged,
-			badge: globalBadge,
-			onStateChange: update,
-		});
-
-		menus.setProps({
-			servers,
-			activeServerURL,
-			hasTrayIcon,
-			isFullScreen: isMainWindowFullScreen,
-			isMenuBarVisible,
-			isSideBarVisible,
-			showWindowOnUnreadChanged,
-			webContents,
-			appName: app.getName(),
-			onClickShowAbout: () => {
-				setOpenModal('about');
-			},
-			onClickQuit: () => {
-				app.quit();
-			},
-			onClickUndo: (webContents) => {
-				webContents.undo();
-			},
-			onClickRedo: (webContents) => {
-				webContents.redo();
-			},
-			onClickCut: (webContents) => {
-				webContents.cut();
-			},
-			onClickCopy: (webContents) => {
-				webContents.copy();
-			},
-			onClickPaste: (webContents) => {
-				webContents.paste();
-			},
-			onClickSelectAll: (webContents) => {
-				webContents.selectAll();
-			},
-			onClickReload: (webContents) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.reload();
-			},
-			onClickReloadIgnoringCache: (webContents) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.reloadIgnoringCache();
-			},
-			onClickClearCertificates: () => {
-				clearCertificates();
-			},
-			onClickOpenDevToolsForServer: (webContents) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.openDevTools();
-			},
-			onClickGoBack: (webContents) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.goBack();
-			},
-			onClickGoForward: (webContents) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.goForward();
-			},
-			onToggleFullScreen: (isEnabled) => {
-				getCurrentWindow().setFullScreen(isEnabled);
-			},
-			onClickResetZoom: () => {
-				getCurrentWebContents().setZoomLevel(0);
-			},
-			onClickZoomIn: () => {
-				const newZoomLevel = Math.min(getCurrentWebContents().getZoomLevel() + 1, 9);
-				getCurrentWebContents().setZoomLevel(newZoomLevel);
-			},
-			onClickZoomOut: () => {
-				const newZoomLevel = Math.max(getCurrentWebContents().getZoomLevel() - 1, -9);
-				getCurrentWebContents().setZoomLevel(newZoomLevel);
-			},
-			onClickReloadApp: () => {
-				getCurrentWebContents().reloadIgnoringCache();
-			},
-			onToggleAppDevTools: () => {
-				getCurrentWebContents().toggleDevTools();
-			},
-			onClickOpenURL: (url) => {
-				shell.openExternal(url);
-			},
-			onClickResetAppData: async () => {
-				const { response } = await showMessageBox({
-					type: 'question',
-					buttons: [
-						t('dialog.resetAppData.yes'),
-						t('dialog.resetAppData.cancel'),
-					],
-					defaultId: 1,
-					title: t('dialog.resetAppData.title'),
-					message: t('dialog.resetAppData.message'),
-				});
-
-				const mustResetAppData = response === 0;
-
-				if (!mustResetAppData) {
-					return;
-				}
-
-				requestAppDataReset();
-			},
-			onClickAddNewServer: () => {
-				getCurrentWindow().show();
-				setActiveServerURL(null);
-			},
-			onToggleTrayIcon: (isEnabled) => {
-				mergePreferences({ hasTrayIcon: isEnabled });
-			},
-			onToggleMenuBar: (isEnabled) => {
-				mergePreferences({ isMenuBarVisible: isEnabled });
-			},
-			onToggleSideBar: (isEnabled) => {
-				mergePreferences({ isSideBarVisible: isEnabled });
-			},
-			onClickSelectServer: ({ url }) => {
-				getCurrentWindow().show();
-				setActiveServerURL(url);
-			},
-			onToggleShowWindowOnUnreadChanged: (isEnabled) => {
-				mergePreferences({ showWindowOnUnreadChanged: isEnabled });
-			},
-		});
-
-		screenSharingModal.setProps({
-			visible: openModal === 'screenSharing',
-			onDismiss: () => {
-				setOpenModal(null);
-				webContents.send('screenshare-result', 'PermissionDeniedError');
-			},
-			onSelectScreenSharingSource: (id) => {
-				setOpenModal(null);
-				webContents.send('screenshare-result', id);
-			},
-		});
-
-		sideBar.setProps({
-			visible: isSideBarVisible,
-			servers,
-			activeServerURL,
-			styles: sideBarStyles,
-			badges,
-			onClickReloadServer: (serverURL) => {
-				webview.reload(serverURL);
-			},
-			onClickRemoveServer: (serverURL) => {
-				removeServer(serverURL);
-			},
-			onClickOpenDevToolsForServer: (serverURL) => {
-				webview.openDevTools(serverURL);
-			},
-			onSortServers: (serverURLs) => {
-				sortServers(serverURLs);
-			},
-			onClickAddServer: () => {
-				setActiveServerURL(null);
-			},
-			onClickServer: (serverURL) => {
-				setActiveServerURL(serverURL);
-			},
-		});
-
 		spellChecking.setProps({});
-
-		touchBar.setProps({
-			servers,
-			activeServerURL,
-			onTouchFormattingButton: (buttonClass) => {
-				if (webContents === getCurrentWebContents()) {
-					return;
-				}
-				webContents.executeJavaScript(`
-					var svg = document.querySelector("button svg[class$='${ buttonClass }']");
-					svg && svg.parentNode.click();
-					`.trim()
-				);
-			},
-			onTouchServer: (serverURL) => {
-				setActiveServerURL(serverURL);
-			},
-		});
-
-		trayIcon.setProps({
-			visible: hasTrayIcon,
-			appName: app.getName(),
-			isMainWindowVisible,
-			badge: globalBadge,
-			onToggleMainWindow: (isVisible) => {
-				if (isVisible) {
-					getCurrentWindow().show();
-					return;
-				}
-
-				getCurrentWindow().hide();
-			},
-			onClickQuit: () => {
-				app.quit();
-			},
-		});
-
-		updateModal.setProps({
-			visible: openModal === 'update',
-			currentVersion: app.getVersion(),
-			newVersion,
-			onDismiss: () => {
-				setOpenModal(null);
-			},
-			onSkipUpdateVersion: async (version) => {
-				await showMessageBox({
-					type: 'warning',
-					title: t('dialog.updateSkip.title'),
-					message: t('dialog.updateSkip.message'),
-					buttons: [t('dialog.updateSkip.ok')],
-					defaultId: 0,
-				});
-				setSkippedVersion(version);
-				setOpenModal(null);
-			},
-			onRemindUpdateLater: () => {
-				setOpenModal(null);
-			},
-			onInstallUpdate: async () => {
-				await showMessageBox({
-					type: 'info',
-					title: t('dialog.updateDownloading.title'),
-					message: t('dialog.updateDownloading.message'),
-					buttons: [t('dialog.updateDownloading.ok')],
-					defaultId: 0,
-				});
-				downloadUpdate();
-				setOpenModal(null);
-			},
-		});
-
-		webview.setProps({
-			servers,
-			activeServerURL,
-			hasSideBarPadding: !isSideBarVisible,
-			onBadgeChange: (serverURL, badge) => {
-				setBadges({
-					...badges,
-					[serverURL]: badge || null,
-				});
-			},
-			onBlur: () => {
-				setWebContents(getCurrentWebContents());
-			},
-			onContextMenu: (serverURL, webContents, params) => {
-				setWebContents(webContents);
-				setEditingParams(params);
-				setSpellCheckingCorrections(getSpellCheckingCorrections(params.selectionText));
-				setSpellCheckingDictionaries(getSpellCheckingDictionaries().map((name) => ({
-					name,
-					enabled: getEnabledSpellCheckingDictionaries().includes(name),
-				})));
-				contextMenu.trigger();
-			},
-			onFocus: (serverURL, webContents) => {
-				setWebContents(webContents);
-			},
-			onRequestScreenSharing: () => {
-				setOpenModal('screenSharing');
-			},
-			onSideBarStyleChange: (serverURL, style) => {
-				setSideBarStyles({
-					...sideBarStyles,
-					[serverURL]: style || null,
-				});
-			},
-			onRequestFocus: (serverURL) => {
-				mainWindow.activate();
-				setActiveServerURL(serverURL);
-				setWebContents(webContents);
-				webContents.focus();
-			},
-			onTitleChange: (serverURL, title) => {
-				setServerProperties(serverURL, { title });
-			},
-			onNavigate: (serverURL, url) => {
-				setServerProperties(serverURL, { lastPath: url });
-			},
-		});
 	});
 
 	useAutoUpdaterEvent('update-available', () => {
@@ -740,7 +228,325 @@ function AppInner() {
 		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
 	});
 
-	return <AppMarkup />;
+	const reloadWebView = useReloadWebView();
+
+	const openDevToolsForWebView = useOpenDevToolsForWebView();
+
+	return <MainWindow
+		hasTrayIcon={hasTrayIcon}
+		showWindowOnUnreadChanged={showWindowOnUnreadChanged}
+		badge={globalBadge}
+		onStateChange={update}
+	>
+		<MenuBar
+			servers={servers}
+			activeServerURL={activeServerURL}
+			hasTrayIcon={hasTrayIcon}
+			isFullScreen={isMainWindowFullScreen}
+			isMenuBarVisible={isMenuBarVisible}
+			isSideBarVisible={isSideBarVisible}
+			showWindowOnUnreadChanged={showWindowOnUnreadChanged}
+			webContents={webContents}
+			appName={app.getName()}
+			onClickShowAbout={() => {
+				setOpenModal('about');
+			}}
+			onClickQuit={() => {
+				app.quit();
+			}}
+			onClickUndo={(webContents) => {
+				webContents.undo();
+			}}
+			onClickRedo={(webContents) => {
+				webContents.redo();
+			}}
+			onClickCut={(webContents) => {
+				webContents.cut();
+			}}
+			onClickCopy={(webContents) => {
+				webContents.copy();
+			}}
+			onClickPaste={(webContents) => {
+				webContents.paste();
+			}}
+			onClickSelectAll={(webContents) => {
+				webContents.selectAll();
+			}}
+			onClickReload={(webContents) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.reload();
+			}}
+			onClickReloadIgnoringCache={(webContents) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.reloadIgnoringCache();
+			}}
+			onClickClearCertificates={() => {
+				clearCertificates();
+			}}
+			onClickOpenDevToolsForServer={(webContents) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.openDevTools();
+			}}
+			onClickGoBack={(webContents) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.goBack();
+			}}
+			onClickGoForward={(webContents) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.goForward();
+			}}
+			onToggleFullScreen={(isEnabled) => {
+				getCurrentWindow().setFullScreen(isEnabled);
+			}}
+			onClickResetZoom={() => {
+				getCurrentWebContents().setZoomLevel(0);
+			}}
+			onClickZoomIn={() => {
+				const newZoomLevel = Math.min(getCurrentWebContents().getZoomLevel() + 1, 9);
+				getCurrentWebContents().setZoomLevel(newZoomLevel);
+			}}
+			onClickZoomOut={() => {
+				const newZoomLevel = Math.max(getCurrentWebContents().getZoomLevel() - 1, -9);
+				getCurrentWebContents().setZoomLevel(newZoomLevel);
+			}}
+			onClickReloadApp={() => {
+				getCurrentWebContents().reloadIgnoringCache();
+			}}
+			onToggleAppDevTools={() => {
+				getCurrentWebContents().toggleDevTools();
+			}}
+			onClickOpenURL={(url) => {
+				shell.openExternal(url);
+			}}
+			onClickResetAppData={async () => {
+				const { response } = await showMessageBox({
+					type: 'question',
+					buttons: [
+						t('dialog.resetAppData.yes'),
+						t('dialog.resetAppData.cancel'),
+					],
+					defaultId: 1,
+					title: t('dialog.resetAppData.title'),
+					message: t('dialog.resetAppData.message'),
+				});
+
+				const mustResetAppData = response === 0;
+
+				if (!mustResetAppData) {
+					return;
+				}
+
+				requestAppDataReset();
+			}}
+			onClickAddNewServer={() => {
+				getCurrentWindow().show();
+				setActiveServerURL(null);
+			}}
+			onToggleTrayIcon={(isEnabled) => {
+				mergePreferences({ hasTrayIcon: isEnabled });
+			}}
+			onToggleMenuBar={(isEnabled) => {
+				mergePreferences({ isMenuBarVisible: isEnabled });
+			}}
+			onToggleSideBar={(isEnabled) => {
+				mergePreferences({ isSideBarVisible: isEnabled });
+			}}
+			onClickSelectServer={({ url }) => {
+				getCurrentWindow().show();
+				setActiveServerURL(url);
+			}}
+			onToggleShowWindowOnUnreadChanged={(isEnabled) => {
+				mergePreferences({ showWindowOnUnreadChanged: isEnabled });
+			}}
+		/>
+		<DragBar />
+		<SideBar
+			visible={isSideBarVisible}
+			servers={servers}
+			activeServerURL={activeServerURL}
+			styles={sideBarStyles}
+			badges={badges}
+			onClickReloadServer={(serverURL) => {
+				reloadWebView(serverURL);
+			}}
+			onClickRemoveServer={(serverURL) => {
+				removeServer(serverURL);
+			}}
+			onClickOpenDevToolsForServer={(serverURL) => {
+				openDevToolsForWebView(serverURL);
+			}}
+			onSortServers={(serverURLs) => {
+				sortServers(serverURLs);
+			}}
+			onClickAddServer={() => {
+				setActiveServerURL(null);
+			}}
+			onClickServer={(serverURL) => {
+				setActiveServerURL(serverURL);
+			}}
+		/>
+		<WebViewsView
+			servers={servers}
+			activeServerURL={activeServerURL}
+			hasSideBarPadding={!isSideBarVisible}
+			onBadgeChange={(serverURL, badge) => {
+				setBadges({
+					...badges,
+					[serverURL]: badge || null,
+				});
+			}}
+			onBlur={() => {
+				setWebContents(getCurrentWebContents());
+			}}
+			onFocus={(serverURL, webContents) => {
+				setWebContents(webContents);
+			}}
+			onRequestScreenSharing={() => {
+				setOpenModal('screenSharing');
+			}}
+			onSideBarStyleChange={(serverURL, style) => {
+				setSideBarStyles({
+					...sideBarStyles,
+					[serverURL]: style || null,
+				});
+			}}
+			onRequestFocus={(serverURL) => {
+				activateMainWindow();
+				setActiveServerURL(serverURL);
+				setWebContents(webContents);
+				webContents.focus();
+			}}
+			onTitleChange={(serverURL, title) => {
+				setServerProperties(serverURL, { title });
+			}}
+			onNavigate={(serverURL, url) => {
+				setServerProperties(serverURL, { lastPath: url });
+			}}
+		/>
+		<LandingView
+			visible={!activeServerURL}
+			addServer={addServer}
+			validateServerURL={validateServerURL}
+		/>
+		<AboutModal
+			visible={openModal === 'about'}
+			canUpdate={canUpdate}
+			canAutoUpdate={doesCheckForUpdatesOnStart}
+			canSetAutoUpdate={canSetCheckForUpdatesOnStart}
+			currentVersion={app.getVersion()}
+			isCheckingForUpdates={isCheckingForUpdates}
+			updateMessage={updateMessage}
+			onDismiss={() => {
+				setOpenModal(null);
+			}}
+			onClickCheckForUpdates={() => {
+				if (!canUpdate || isCheckingForUpdates) {
+					return;
+				}
+
+				checkForUpdates();
+			}}
+			onToggleCheckForUpdatesOnStart={(isEnabled) => {
+				if (!canSetCheckForUpdatesOnStart) {
+					return;
+				}
+
+				setCheckForUpdatesOnStart(isEnabled);
+			}}
+		/>
+		<UpdateModal
+			visible={openModal === 'update'}
+			currentVersion={app.getVersion()}
+			newVersion={newVersion}
+			onDismiss={() => {
+				setOpenModal(null);
+			}}
+			onSkipUpdateVersion={async (version) => {
+				await showMessageBox({
+					type: 'warning',
+					title: t('dialog.updateSkip.title'),
+					message: t('dialog.updateSkip.message'),
+					buttons: [t('dialog.updateSkip.ok')],
+					defaultId: 0,
+				});
+				setSkippedVersion(version);
+				setOpenModal(null);
+			}}
+			onRemindUpdateLater={() => {
+				setOpenModal(null);
+			}}
+			onInstallUpdate={async () => {
+				await showMessageBox({
+					type: 'info',
+					title: t('dialog.updateDownloading.title'),
+					message: t('dialog.updateDownloading.message'),
+					buttons: [t('dialog.updateDownloading.ok')],
+					defaultId: 0,
+				});
+				downloadUpdate();
+				setOpenModal(null);
+			}}
+		/>
+		<ScreenSharingModal
+			visible={openModal === 'screenSharing'}
+			onDismiss={() => {
+				setOpenModal(null);
+				webContents.send('screenshare-result', 'PermissionDeniedError');
+			}}
+			onSelectScreenSharingSource={(id) => {
+				setOpenModal(null);
+				webContents.send('screenshare-result', id);
+			}}
+		/>
+		<Dock
+			hasTrayIcon={hasTrayIcon}
+			badge={globalBadge}
+		/>
+		<TrayIcon
+			visible={hasTrayIcon}
+			appName={app.getName()}
+			isMainWindowVisible={isMainWindowVisible}
+			badge={globalBadge}
+			onToggleMainWindow={(isVisible) => {
+				if (isVisible) {
+					getCurrentWindow().show();
+					return;
+				}
+
+				getCurrentWindow().hide();
+			}}
+			onClickQuit={() => {
+				app.quit();
+			}}
+		/>
+		<TouchBar
+			servers={servers}
+			activeServerURL={activeServerURL}
+			onTouchFormattingButton={(buttonClass) => {
+				if (webContents === getCurrentWebContents()) {
+					return;
+				}
+				webContents.executeJavaScript(`
+					var svg = document.querySelector("button svg[class$='${ buttonClass }']");
+					svg && svg.parentNode.click();
+					`.trim()
+				);
+			}}
+			onTouchServer={(serverURL) => {
+				setActiveServerURL(serverURL);
+			}}
+		/>
+	</MainWindow>;
 }
 
 export function App() {

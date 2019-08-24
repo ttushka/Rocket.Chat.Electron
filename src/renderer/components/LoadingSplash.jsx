@@ -1,6 +1,6 @@
 import React from 'react';
-import { LoadingIndicator } from './LoadingIndicator';
-import { RocketChatLogo } from './RocketChatLogo';
+import { LoadingIndicator } from './ui/LoadingIndicator';
+import { RocketChatLogo } from './ui/RocketChatLogo';
 import { Outer, Inner } from './LoadingSplash.styles';
 
 
