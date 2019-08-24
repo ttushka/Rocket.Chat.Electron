@@ -37,6 +37,125 @@ import {
 
 const { app, getCurrentWebContents, getCurrentWindow } = remote;
 
+function AppMarkup() {
+	return <>
+		<div className='sidebar sidebar--hidden'>
+			<div className='sidebar__inner'>
+				<ol className='sidebar__list sidebar__server-list'>
+				</ol>
+				<button className='sidebar__action sidebar__add-server' data-tooltip='Add server'>
+					<span className='sidebar__action-label'>+</span>
+				</button>
+			</div>
+		</div>
+
+		<section className='landing-view'>
+			<div className='wrapper'>
+				<header>
+					<img className='logo' src='./images/logo-dark.svg' />
+				</header>
+
+				<div className='loading-indicator'>
+					<span className='dot'></span>
+					<span className='dot'></span>
+					<span className='dot'></span>
+				</div>
+
+				<form id='login-card' method='/'>
+					<header>
+						<h2 className='connect__prompt'>Enter your server URL</h2>
+					</header>
+					<div className='fields'>
+						<div className='input-text active'>
+							<input type='text' name='host' placeholder='https://open.rocket.chat' dir='auto' />
+						</div>
+					</div>
+
+					<div id='invalidUrl' style={{ display: 'none' }} className='alert alert-danger'>No valid server found</div>
+
+					<div className='connect__error alert alert-danger only-offline'>Check connection</div>
+
+					<div className='submit'>
+						<button type='submit' data-loading-text='Connecting...' className='button primary login'>Connect</button>
+					</div>
+				</form>
+			</div>
+		</section>
+
+		<dialog className='about-modal'>
+			<section className='app-info'>
+				<div className='app-logo'>
+					<img src='./images/logo.svg' />
+				</div>
+				<div className='app-version'>
+				Version <span className='version'>%s</span>
+				</div>
+			</section>
+
+			<section className='updates hidden'>
+				<button className='check-for-updates button primary'>
+				Check for Updates
+				</button>
+
+				<div className='checking-for-updates hidden'>
+					<span className='dot'></span>
+					<span className='dot'></span>
+					<span className='dot'></span>
+					<span className='message'></span>
+				</div>
+
+				<label className='check-for-updates-on-start__label'>
+					<input className='check-for-updates-on-start' type='checkbox' defaultChecked /> <span>Check for Updates on Start</span>
+				</label>
+			</section>
+
+			<div className='copyright'></div>
+		</dialog>
+
+		<dialog className='update-modal'>
+			<div className='update-content'>
+				<h1 className='update-title'>New Update is Available</h1>
+				<p className='update-message'>A new version of the Rocket.Chat Desktop App is available!</p>
+
+				<div className='update-info'>
+					<div className='app-version current-version'>
+						<div className='app-version-label'>Current Version:</div>
+						<div className='app-version-value'>a.b.c</div>
+					</div>
+					<div className='update-arrow'>&rarr;</div>
+					<div className='app-version new-version'>
+						<div className='app-version-label'>New Version:</div>
+						<div className='app-version-value'>x.y.z</div>
+					</div>
+				</div>
+			</div>
+
+			<div className='update-actions'>
+				<button className='update-skip-action button secondary'>Skip This Version</button>
+				<button className='update-remind-action button secondary'>Remind Me Later</button>
+				<button className='update-install-action button primary'>Install Update</button>
+			</div>
+		</dialog>
+
+		<dialog className='screen-sharing-modal'>
+			<template className='screenshare-source-template'>
+				<div className='screenshare-source'>
+					<div className='screenshare-source-thumbnail'>
+						<img src='' alt='' />
+					</div>
+					<div className='screenshare-source-name'></div>
+				</div>
+			</template>
+			<h1 className='screenshare-title'>Select a screen to share</h1>
+			<div className='screenshare-sources'></div>
+		</dialog>
+
+		<div className="webviews" />
+
+		<div className='drag-region'></div>
+	</>;
+}
+
 function AppInner() {
 	const { t } = useTranslation();
 
@@ -611,7 +730,7 @@ function AppInner() {
 		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
 	});
 
-	return null;
+	return <AppMarkup />;
 }
 
 export function App() {

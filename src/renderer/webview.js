@@ -160,7 +160,7 @@ const setProps = (partialProps) => {
 			disconnect();
 		});
 
-		document.body.appendChild(webviewObj);
+		document.querySelector('.webviews').appendChild(webviewObj);
 
 		webviewObj.src = server.lastPath || server.url;
 	});
