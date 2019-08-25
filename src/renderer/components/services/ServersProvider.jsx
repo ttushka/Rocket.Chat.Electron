@@ -204,13 +204,13 @@ export const useServersActions = () => {
 		}));
 	};
 
-	return {
+	return useMemo(() => ({
 		addServer,
 		removeServer,
 		sortServers,
 		setServerProperties,
 		setActiveServerURL,
-	};
+	}), [servers]);
 };
 
 export const useServerValidation = () => async (serverURL, timeout = 2000) => {

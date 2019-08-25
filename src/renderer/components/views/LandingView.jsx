@@ -1,215 +1,135 @@
-import React, { useEffect } from 'react';
-import { useServersActions, useServerValidation, useActiveServer } from '../services/ServersProvider';
+import { Button } from '@rocket.chat/fuselage';
 import { t } from 'i18next';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useServersActions, useServerValidation } from '../services/ServersProvider';
+import { useOpenView } from '../services/OpenViewState';
+import { RocketChatLogo } from '../ui/RocketChatLogo';
 
 
 const defaultServerURL = 'https://open.rocket.chat';
 
-let props = {
-	visible: true,
-	addServer: null,
-	validateServerURL: null,
-};
-let offline = false;
-let serverURL = '';
-let errorMessage = '';
-let validating = false;
-let section;
+export function LandingView() {
+	const { addServer } = useServersActions();
+	const validateServerURL = useServerValidation();
 
-const setProps = (partialProps) => {
-	props = {
-		...props,
-		...partialProps,
-	};
+	const [serverURL, setServerURL] = useState('');
+	const [errorMessage, setErrorMessage] = useState('');
+	const [isValidating, setValidating] = useState(false);
 
-	const setOffline = (newOffline) => {
-		offline = newOffline;
-		setProps({});
-	};
+	const openView = useOpenView();
+	const visible = useMemo(() => !openView || openView === 'landing', [openView]);
 
-	const setServerURL = (newServerURL) => {
-		serverURL = newServerURL;
-		setProps({});
-	};
+	const tryValidation = (_serverURL = serverURL.trim()) => (resolve, reject) => {
+		setServerURL(_serverURL);
+		setErrorMessage('');
 
-	const setErrorMessage = (newErrorMessage) => {
-		errorMessage = newErrorMessage;
-		setProps({});
-	};
+		if (!_serverURL) {
+			setValidating(false);
+			resolve();
+			return;
+		}
 
-	const setValidating = (newValidating) => {
-		validating = newValidating;
-		setProps({});
-	};
+		setValidating(true);
 
-	if (!section) {
-		section = document.querySelector('.landing-view');
-
-		const tryValidation = (resolve, reject) => {
-			serverURL = serverURL.trim();
-
-			setServerURL(serverURL);
-			setErrorMessage('');
-
-			if (!serverURL) {
+		validateServerURL(_serverURL)
+			.then(() => {
 				setValidating(false);
 				resolve();
-				return;
-			}
-
-			setValidating(true);
-
-			const { validateServerURL } = props;
-
-			validateServerURL(serverURL)
-				.then(() => {
+			})
+			.catch((status) => {
+				if (status === 'basic-auth') {
+					setErrorMessage(t('error.authNeeded', { auth: 'username:password@host' }));
 					setValidating(false);
-					resolve();
-				})
-				.catch((status) => {
-					if (status === 'basic-auth') {
-						setErrorMessage(t('error.authNeeded', { auth: 'username:password@host' }));
-						setValidating(false);
-						reject();
-						return;
+					reject();
+					return;
+				}
+
+				if (/^https?:\/\/.+/.test(_serverURL)) {
+					if (status === 'invalid') {
+						setErrorMessage(t('error.noValidServerFound'));
+					} else if (status === 'timeout') {
+						setErrorMessage(t('error.connectTimeout'));
+					} else {
+						setErrorMessage(status.message || String(status));
 					}
 
-					if (/^https?:\/\/.+/.test(serverURL)) {
-						if (status === 'invalid') {
-							setErrorMessage(t('error.noValidServerFound'));
-						} else if (status === 'timeout') {
-							setErrorMessage(t('error.connectTimeout'));
-						} else {
-							setErrorMessage(status.message || String(status));
-						}
+					setValidating(false);
+					reject();
+					return;
+				}
 
-						setValidating(false);
-						reject();
-						return;
-					}
+				if (!/(^https?:\/\/)|(\.)|(^([^:]+:[^@]+@)?localhost(:\d+)?$)/.test(_serverURL)) {
+					return tryValidation(`https://${ _serverURL }.rocket.chat`)(resolve, reject);
+				}
 
-					if (!/(^https?:\/\/)|(\.)|(^([^:]+:[^@]+@)?localhost(:\d+)?$)/.test(serverURL)) {
-						setServerURL(`https://${ serverURL }.rocket.chat`);
-						return tryValidation(resolve, reject);
-					}
+				if (!/^https?:\/\//.test(_serverURL)) {
+					return tryValidation(`https://${ _serverURL }`)(resolve, reject);
+				}
+			});
+	};
 
-					if (!/^https?:\/\//.test(serverURL)) {
-						setServerURL(`https://${ serverURL }`);
-						return tryValidation(resolve, reject);
-					}
-				});
-		};
+	const validate = () => new Promise(tryValidation(serverURL));
 
-		const validate = () => new Promise(tryValidation);
+	const handleFormSubmit = async (event) => {
+		event.preventDefault();
+		event.stopPropagation();
 
+		await validate();
+
+		addServer(serverURL || defaultServerURL);
+
+		setServerURL('');
+	};
+
+	const handleInputBlur = () => {
+		validate();
+	};
+
+	const handleInputChange = (event) => {
+		setServerURL(event.currentTarget.value);
+	};
+
+	const [isOffline, setOffline] = useState(false);
+
+	useEffect(() => {
 		const handleConnectionChange = () => {
 			setOffline(!navigator.onLine);
 		};
 
-		const handleFormSubmit = async (event) => {
-			event.preventDefault();
-			event.stopPropagation();
-
-			await validate();
-
-			const { addServer } = props;
-
-			addServer(serverURL || defaultServerURL);
-
-			setServerURL('');
-		};
-
-		const handleInputBlur = () => {
-			validate();
-		};
-
-		const handleInputChange = (event) => {
-			setServerURL(event.currentTarget.value);
-		};
-
 		window.addEventListener('online', handleConnectionChange);
 		window.addEventListener('offline', handleConnectionChange);
+
 		handleConnectionChange();
 
-		section.querySelector('#login-card').addEventListener('submit', handleFormSubmit, false);
-		section.querySelector('#login-card [name="host"]').addEventListener('blur', handleInputBlur, false);
-		section.querySelector('#login-card [name="host"]').addEventListener('input', handleInputChange, false);
+		return () => {
+			window.removeEventListener('online', handleConnectionChange);
+			window.removeEventListener('offline', handleConnectionChange);
+		};
+	}, []);
 
-		document.querySelector('.app-page').classList.remove('app-page--loading');
-	}
+	useEffect(() => {
+		document.body.classList.toggle('offline', isOffline);
+	}, [isOffline]);
 
-	const { visible } = props;
-
-	document.body.classList.toggle('offline', offline);
-
-	section.querySelector('#login-card .connect__prompt').innerText =
-		errorMessage ? t('landing.invalidUrl') : t('landing.inputUrl');
-
-	section.querySelector('#login-card [name="host"]').setAttribute('placeholder', defaultServerURL);
-	section.querySelector('#login-card [name="host"]').classList.toggle('wrong', !!errorMessage);
-	section.querySelector('#login-card [name="host"]').value = serverURL;
-
-	section.querySelector('#login-card #invalidUrl').style.display = errorMessage ? 'block' : 'none';
-	section.querySelector('#login-card #invalidUrl').innerHTML = errorMessage;
-
-	section.querySelector('#login-card .connect__error').innerText = t('error.offline');
-
-	section.querySelector('#login-card .login').innerText =
-		validating ? t('landing.validating') : t('landing.connect');
-	section.querySelector('#login-card .login').toggleAttribute('disabled', validating);
-
-	document.querySelector('.landing-view').classList.toggle('hide', !visible);
-};
-
-const Markup = React.memo(() =>
-	<section className='landing-view'>
+	return <section className={['landing-view', !visible && 'hide'].filter(Boolean).join(' ')}>
 		<div className='wrapper'>
-			<header>
-				<img className='logo' src='./images/logo-dark.svg' />
-			</header>
-
-			<div className='loading-indicator'>
-				<span className='dot'></span>
-				<span className='dot'></span>
-				<span className='dot'></span>
-			</div>
-
-			<form id='login-card' method='/'>
+			<RocketChatLogo dark />
+			<form id='login-card' method='/' onSubmit={handleFormSubmit}>
 				<header>
-					<h2 className='connect__prompt'>Enter your server URL</h2>
+					<h2 className='connect__prompt'>{errorMessage ? t('landing.invalidUrl') : t('landing.inputUrl')}</h2>
 				</header>
 				<div className='fields'>
 					<div className='input-text active'>
-						<input type='text' name='host' placeholder='https://open.rocket.chat' dir='auto' />
+						<input type='text' name='host' placeholder={defaultServerURL} dir='auto' onBlur={handleInputBlur} value={serverURL} onChange={handleInputChange} className={errorMessage ? 'wrong' : undefined} />
 					</div>
 				</div>
 
-				<div id='invalidUrl' style={{ display: 'none' }} className='alert alert-danger'>No valid server found</div>
+				<div id='invalidUrl' style={{ display: errorMessage ? 'block' : 'none' }} className='alert alert-danger'>{errorMessage}</div>
 
-				<div className='connect__error alert alert-danger only-offline'>Check connection</div>
+				<div className='connect__error alert alert-danger only-offline'>{t('error.offline')}</div>
 
-				<div className='submit'>
-					<button type='submit' data-loading-text='Connecting...' className='button primary login'>Connect</button>
-				</div>
+				<Button type='submit' primary disabled={isValidating} className='login'>{isValidating ? t('landing.validating') : t('landing.connect')}</Button>
 			</form>
 		</div>
-	</section>
-);
-Markup.displayName = 'Markup';
-
-export function LandingView() {
-	const activeServer = useActiveServer();
-
-	const { addServer } = useServersActions();
-	const validateServerURL = useServerValidation();
-
-	useEffect(() => {
-		setProps({
-			visible: !activeServer,
-			addServer,
-			validateServerURL,
-		});
-	});
-
-	return <Markup />;
+	</section>;
 }

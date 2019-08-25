@@ -60,7 +60,7 @@ import {
 	useOpenModal,
 	useSetOpenModal,
 } from './services/OpenModalState';
-import { OpenViewState } from './services/OpenViewState';
+import { OpenViewState, useSetOpenView } from './services/OpenViewState';
 
 
 const { app, getCurrentWebContents } = remote;
@@ -102,6 +102,8 @@ function AppInner() {
 	const clearCertificates = useClearCertificates();
 
 	const activateMainWindow = useActivateMainWindow();
+
+	const setOpenView = useSetOpenView();
 
 	useAutoUpdaterEvent('update-available', () => {
 		setOpenModal('update');
@@ -168,6 +170,7 @@ function AppInner() {
 		activateMainWindow();
 		if (servers.some(({ url }) => url === serverURL)) {
 			setActiveServerURL(serverURL);
+			setOpenView('webViews');
 			return;
 		}
 
@@ -300,6 +303,7 @@ function AppInner() {
 			onClickAddNewServer={() => {
 				activateMainWindow();
 				setActiveServerURL(null);
+				setOpenView('landing');
 			}}
 			onToggleTrayIcon={(isEnabled) => {
 				mergePreferences({ hasTrayIcon: isEnabled });
@@ -313,6 +317,7 @@ function AppInner() {
 			onClickSelectServer={({ url }) => {
 				activateMainWindow();
 				setActiveServerURL(url);
+				setOpenView('webViews');
 			}}
 			onToggleShowWindowOnUnreadChanged={(isEnabled) => {
 				mergePreferences({ showWindowOnUnreadChanged: isEnabled });
@@ -334,9 +339,11 @@ function AppInner() {
 			}}
 			onClickAddServer={() => {
 				setActiveServerURL(null);
+				setOpenView('landing');
 			}}
 			onClickServer={(serverURL) => {
 				setActiveServerURL(serverURL);
+				setOpenView('webViews');
 			}}
 		/>
 		<>
@@ -359,6 +366,7 @@ function AppInner() {
 				onRequestFocus={(serverURL) => {
 					activateMainWindow();
 					setActiveServerURL(serverURL);
+					setOpenView('webViews');
 					setFocusedWebContents(focusedWebContents);
 					focusedWebContents.focus();
 				}}
@@ -460,6 +468,7 @@ function AppInner() {
 			}}
 			onTouchServer={(serverURL) => {
 				setActiveServerURL(serverURL);
+				setOpenView('webViews');
 			}}
 		/>
 	</>;

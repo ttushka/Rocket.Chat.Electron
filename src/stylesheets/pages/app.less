@@ -6,25 +6,6 @@
 	user-select: none;
 
 	background: @primary-background-color;
-
-	&.app-page--loading {
-		.loading-indicator {
-			display: flex;
-		}
-
-		#login-card {
-			display: none;
-		}
-	}
-
-	.hidden {
-		display: none !important;
-	}
-
-	.loading-indicator {
-		.loading-component;
-		display: none;
-	}
 }
 
 .only-offline {
@@ -108,7 +89,6 @@ webview.active {
 }
 
 .landing-view {
-
 	position: fixed;
 	z-index: 1;
 	top: 0;
@@ -139,7 +119,6 @@ webview.active {
 		position: relative;
 		z-index: 10;
 
-		min-width: 600px;
 		padding: 45px 0 35px;
 
 		text-align: center;
@@ -178,14 +157,6 @@ webview.active {
 
 	header {
 		padding: 18px 0;
-
-		p {
-			margin: 8px 0 0;
-
-			font-size: 14px;
-			font-weight: 300;
-			line-height: 22px;
-		}
 	}
 
 	h2 {

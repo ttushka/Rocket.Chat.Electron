@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { t } from 'i18next';
-import { copyright } from '../../../package.json';
+import { copyright } from '../../../../package.json';
 import { useAppVersion } from '../../hooks/useAppVersion';
 import { useAutoUpdaterState, useAutoUpdaterEvent } from '../services/AutoUpdaterHandler';
 
