@@ -3,16 +3,13 @@ import { useEffect } from 'react';
 import { usePreferences } from './services/PreferencesProvider';
 import { getTrayIconImage, getAppIconImage } from '../icon';
 import { useGlobalBadge } from './services/ServersProvider';
+import { usePrevious } from '../hooks/usePrevious';
+import { useMainWindow } from './MainWindow';
 
 
-const { app, getCurrentWindow } = remote;
+const { app } = remote;
 
-let props = {
-	hasTrayIcon: false,
-	badge: null,
-};
-
-const getBadgeText = ({ badge }) => {
+const getBadgeText = (badge) => {
 	if (badge === '•') {
 		return '•';
 	}
@@ -24,54 +21,66 @@ const getBadgeText = ({ badge }) => {
 	return '';
 };
 
-const setProps = (partialProps) => {
-	const prevProps = props;
-	props = {
-		...props,
-		...partialProps,
-	};
+const getMentionCount = (badge) => (Number.isInteger(badge) ? badge : 0);
 
-	const {
-		hasTrayIcon,
-		badge,
-	} = props;
-
-	const {
-		badge: previousBadge,
-	} = prevProps;
-
-	if (process.platform === 'darwin') {
-		app.dock.setBadge(getBadgeText(props));
-		const count = Number.isInteger(badge) ? badge : 0;
-		const previousCount = Number.isInteger(previousBadge) ? previousBadge : 0;
-		if (count > 0 && previousCount === 0) {
-			app.dock.bounce();
-		}
+const useMacOSDock = () => {
+	if (process.platform !== 'darwin') {
+		return;
 	}
 
-	const mainWindow = getCurrentWindow();
-
-	if (process.platform === 'linux' || process.platform === 'win32') {
-		const image = hasTrayIcon ? getAppIconImage() : getTrayIconImage({ badge });
-		mainWindow.setIcon(image);
-	}
-
-	if (!mainWindow.isFocused()) {
-		const count = Number.isInteger(badge) ? badge : 0;
-		mainWindow.flashFrame(count > 0);
-	}
-};
-
-export function Dock() {
-	const { hasTrayIcon } = usePreferences();
 	const badge = useGlobalBadge();
 
 	useEffect(() => {
-		setProps({
-			hasTrayIcon,
-			badge,
-		});
-	});
+		app.dock.setBadge(getBadgeText(badge));
+	}, [badge]);
+
+	const previousBadge = usePrevious(badge);
+
+	useEffect(() => {
+		const count = getMentionCount(badge);
+		const previousCount = getMentionCount(previousBadge);
+
+		if (count > 0 && previousCount === 0) {
+			app.dock.bounce();
+		}
+	}, [badge]);
+};
+
+const useMainWindowFlashFrame = () => {
+	if (process.platform !== 'win32') {
+		return;
+	}
+
+	const mainWindow = useMainWindow();
+	const badge = useGlobalBadge();
+
+	useEffect(() => {
+		if (!mainWindow.isFocused()) {
+			const count = getMentionCount(badge);
+			mainWindow.flashFrame(count > 0);
+		}
+	}, [badge]);
+};
+
+const useMainWindowIcon = () => {
+	if (process.platform !== 'linux' && process.platform !== 'win32') {
+		return;
+	}
+
+	const mainWindow = useMainWindow();
+	const badge = useGlobalBadge();
+	const { hasTrayIcon } = usePreferences();
+
+	useEffect(() => {
+		const image = hasTrayIcon ? getAppIconImage() : getTrayIconImage({ badge });
+		mainWindow.setIcon(image);
+	}, [badge, hasTrayIcon]);
+};
+
+export function Dock() {
+	useMacOSDock();
+	useMainWindowFlashFrame();
+	useMainWindowIcon();
 
 	return null;
 }
