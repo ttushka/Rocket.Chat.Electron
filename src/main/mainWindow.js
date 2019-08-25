@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, shell } from 'electron';
 import { parse as parseURL } from 'url';
 
 
@@ -36,6 +36,11 @@ export const setupMainWindow = () => {
 
 	const handleNewWindow = (event, url, frameName, disposition, options) => {
 		event.preventDefault();
+
+		if (disposition === 'background-tab') {
+			shell.openExternal(url);
+			return;
+		}
 
 		const {
 			webPreferences: {
