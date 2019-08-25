@@ -32,6 +32,10 @@ const activate = () => {
 	currentWindow.focus();
 };
 
+const deactivate = () => {
+	currentWindow.hide();
+};
+
 const fetchState = () => {
 	const [x, y] = currentWindow.getPosition();
 	const [width, height] = currentWindow.getSize();
@@ -53,6 +57,8 @@ const MainWindowStateContext = createContext({});
 export const useMainWindow = () => currentWindow;
 
 export const useActivateMainWindow = () => activate;
+
+export const useDeactivateMainWindow = () => deactivate;
 
 export const useMainWindowState = () => useContext(MainWindowStateContext);
 

@@ -1,17 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import { useCallbackRef } from './useCallbackRef';
 
 
 export const useEventListener = (eventEmitter, eventName, listener) => {
-	const listenerRef = useRef(listener);
-	listenerRef.current = listener;
+	const listenerRef = useCallbackRef(listener);
 
 	useEffect(() => {
-		const attachedListener = (...args) => listenerRef.current.call(null, ...args);
+		if (!eventEmitter) {
+			return;
+		}
 
-		eventEmitter.addListener(eventName, attachedListener);
+		eventEmitter.addListener(eventName, listenerRef);
 
 		return () => {
-			eventEmitter.removeListener(eventName, attachedListener);
+			eventEmitter.removeListener(eventName, listenerRef);
 		};
 	}, [eventEmitter, eventName]);
 };

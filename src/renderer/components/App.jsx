@@ -442,19 +442,7 @@ function AppInner() {
 			}}
 		/>
 		<Dock />
-		<TrayIcon
-			onToggleMainWindow={(isVisible) => {
-				if (isVisible) {
-					mainWindow.show();
-					return;
-				}
-
-				mainWindow.hide();
-			}}
-			onClickQuit={() => {
-				app.quit();
-			}}
-		/>
+		<TrayIcon />
 		<TouchBar
 			onTouchFormattingButton={(buttonClass) => {
 				if (focusedWebContents === getCurrentWebContents()) {

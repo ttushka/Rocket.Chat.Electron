@@ -1,138 +1,156 @@
 import { remote } from 'electron';
-import { t } from 'i18next';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useAppName } from '../hooks/useAppName';
 import { usePreferences } from './services/PreferencesProvider';
-import { useMainWindowState } from './MainWindow';
+import { useMainWindowState, useActivateMainWindow, useDeactivateMainWindow } from './MainWindow';
 import { getTrayIconImage } from '../icon';
 import { useGlobalBadge } from './services/ServersProvider';
+import { useEventListener } from '../hooks/useEventListener';
+import { useMacOSDarkMode } from '../hooks/useMacOSDarkMode';
+import { useTranslation } from 'react-i18next';
+import { useCallbackRef } from '../hooks/useCallbackRef';
+import { useQuitApp } from '../hooks/useQuitApp';
 
 
-const { Menu, systemPreferences, Tray } = remote;
+const { Menu, Tray } = remote;
 
-let props = {
-	visible: true,
-	badge: null,
-	isMainWindowVisible: true,
-};
-let trayIcon;
-let darwinThemeSubscriberId;
+const useTrayIcon = () => {
+	const trayIconRef = useRef();
+	const { hasTrayIcon } = usePreferences();
+	const badge = useGlobalBadge();
+	const isMacOSDarkMode = useMacOSDarkMode();
 
-const getIconTitle = ({ badge }) => (Number.isInteger(badge) ? String(badge) : '');
+	const image = useMemo(() => hasTrayIcon && getTrayIconImage({ badge, dark: isMacOSDarkMode }),
+		[hasTrayIcon, badge, isMacOSDarkMode]);
 
-const getIconTooltip = ({ appName, badge }) => {
-	if (badge === '•') {
-		return t('tray.tooltip.unreadMessage', { appName });
-	}
+	useEffect(() => {
+		if (hasTrayIcon) {
+			if (trayIconRef.current) {
+				trayIconRef.current.setImage(image);
+			} else {
+				trayIconRef.current = new Tray(image);
+			}
+		} else if (trayIconRef.current) {
+			trayIconRef.current.destroy();
+			trayIconRef.current = null;
+		}
+	}, [hasTrayIcon, image]);
 
-	if (Number.isInteger(badge)) {
-		return t('tray.tooltip.unreadMention', { appName, count: badge });
-	}
-
-	return t('tray.tooltip.noUnreadMessage', { appName });
-};
-
-const createContextMenuTemplate = ({
-	isMainWindowVisible,
-	onToggleMainWindow,
-	onClickQuit,
-}) => ([
-	{
-		label: !isMainWindowVisible ? t('tray.menu.show') : t('tray.menu.hide'),
-		click: onToggleMainWindow && onToggleMainWindow.bind(null, !isMainWindowVisible),
-	},
-	{
-		label: t('tray.menu.quit'),
-		click: onClickQuit && onClickQuit.bind(null),
-	},
-]);
-
-const createIcon = () => {
-	const {
-		badge,
-	} = props;
-
-	const image = getTrayIconImage({ badge });
-
-	if (trayIcon) {
-		trayIcon.setImage(image);
-		return;
-	}
-
-	trayIcon = new Tray(image);
-
-	if (process.platform === 'darwin') {
-		darwinThemeSubscriberId = systemPreferences.subscribeNotification('AppleInterfaceThemeChangedNotification', () => {
-			trayIcon.setImage(getTrayIconImage({ badge }));
-		});
-	}
-
-	trayIcon.on('right-click', (event, bounds) => trayIcon.popUpContextMenu(undefined, bounds));
+	return trayIconRef.current;
 };
 
-const destroyIcon = () => {
-	if (!trayIcon) {
-		return;
-	}
-
-	if (process.platform === 'darwin' && darwinThemeSubscriberId) {
-		systemPreferences.unsubscribeNotification(darwinThemeSubscriberId);
-		darwinThemeSubscriberId = null;
-	}
-
-	trayIcon.destroy();
-	trayIcon = null;
-};
-
-const setProps = (partialProps) => {
-	props = {
-		...props,
-		...partialProps,
-	};
-
-	const {
-		visible,
-		isMainWindowVisible,
-		onToggleMainWindow,
-	} = props;
-
-	if (!visible) {
-		destroyIcon();
-		return;
-	}
-
-	createIcon();
-
-	trayIcon.setToolTip(getIconTooltip(props));
-
-	if (process.platform === 'darwin') {
-		trayIcon.setTitle(getIconTitle(props));
-	}
-
-	trayIcon.removeAllListeners('click');
-	onToggleMainWindow && trayIcon.addListener('click', onToggleMainWindow.bind(null, !isMainWindowVisible));
-
-	const template = createContextMenuTemplate(props);
-	const contextMenu = Menu.buildFromTemplate(template);
-	trayIcon.setContextMenu(contextMenu);
-};
-
-export function TrayIcon(props) {
+const useTrayIconTooltip = (trayIcon) => {
 	const appName = useAppName();
+	const badge = useGlobalBadge();
+	const { t } = useTranslation();
 
-	const { hasTrayIcon: visible } = usePreferences();
-	const { isVisible: isMainWindowVisible } = useMainWindowState();
+	useEffect(() => {
+		if (!trayIcon) {
+			return;
+		}
+
+		if (badge === '•') {
+			trayIcon.setToolTip(t('tray.tooltip.unreadMessage', { appName }));
+			return;
+		}
+
+		if (Number.isInteger(badge)) {
+			trayIcon.setToolTip(t('tray.tooltip.unreadMention', { appName, count: badge }));
+			return;
+		}
+
+		trayIcon.setToolTip(t('tray.tooltip.noUnreadMessage', { appName }));
+	}, [trayIcon, badge, appName]);
+};
+
+const useTrayIconTitle = (trayIcon) => {
+	if (process.platform !== 'darwin') {
+		return;
+	}
+
 	const badge = useGlobalBadge();
 
 	useEffect(() => {
-		setProps({
-			appName,
-			visible,
-			isMainWindowVisible,
-			badge,
-			...props,
-		});
+		if (!trayIcon) {
+			return;
+		}
+
+		trayIcon.setTitle(Number.isInteger(badge) ? String(badge) : '');
+	}, [trayIcon, badge]);
+};
+
+const useTrayIconContextMenu = (trayIcon) => {
+	const { t } = useTranslation();
+	const { isVisible: isMainWindowVisible } = useMainWindowState();
+	const activateMainWindow = useActivateMainWindow();
+	const deactivateMainWindow = useDeactivateMainWindow();
+	const quitApp = useQuitApp();
+
+	const onToggleMainWindow = () => {
+		if (!isMainWindowVisible) {
+			activateMainWindow();
+			return;
+		}
+
+		deactivateMainWindow();
+	};
+
+	const onClickQuit = () => {
+		quitApp();
+	};
+
+	const onToggleMainWindowRef = useCallbackRef(onToggleMainWindow);
+	const onClickQuitRef = useCallbackRef(onClickQuit);
+
+	useEffect(() => {
+		if (!trayIcon) {
+			return;
+		}
+
+		const template = [
+			{
+				label: !isMainWindowVisible ? t('tray.menu.show') : t('tray.menu.hide'),
+				click: onToggleMainWindowRef,
+			},
+			{
+				label: t('tray.menu.quit'),
+				click: onClickQuitRef,
+			},
+		];
+
+		const contextMenu = Menu.buildFromTemplate(template);
+
+		trayIcon.setContextMenu(contextMenu);
+	}, [trayIcon, isMainWindowVisible]);
+
+	const handleRightClick = (event, bounds) => {
+		trayIcon.popUpContextMenu(undefined, bounds);
+	};
+
+	useEventListener(trayIcon, 'right-click', handleRightClick);
+};
+
+const useTrayIconClick = (trayIcon) => {
+	const { isVisible: isMainWindowVisible } = useMainWindowState();
+	const activateMainWindow = useActivateMainWindow();
+	const deactivateMainWindow = useDeactivateMainWindow();
+
+	useEventListener(trayIcon, 'click', () => {
+		if (isMainWindowVisible) {
+			activateMainWindow();
+			return;
+		}
+
+		deactivateMainWindow();
 	});
+};
+
+export function TrayIcon() {
+	const trayIcon = useTrayIcon();
+	useTrayIconTooltip(trayIcon);
+	useTrayIconTitle(trayIcon);
+	useTrayIconContextMenu(trayIcon);
+	useTrayIconClick(trayIcon);
 
 	return null;
 }
