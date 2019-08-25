@@ -1,16 +1,27 @@
 import { ipcRenderer } from 'electron';
 
 
+let style = null;
+
+const sendStyle = (newStyle) => {
+	if (JSON.stringify(style) === JSON.stringify(newStyle)) {
+		return;
+	}
+
+	ipcRenderer.sendToHost('sidebar-style', newStyle);
+	style = newStyle;
+};
+
 function getStylesFromSidebar(sidebar) {
 	const { color, background } = window.getComputedStyle(sidebar);
 	const sidebarItem = sidebar.querySelector('.sidebar-item');
 	const itemColor = sidebarItem && window.getComputedStyle(sidebarItem).color;
-	ipcRenderer.sendToHost('sidebar-style', { color: itemColor || color, background });
+	sendStyle({ color: itemColor || color, background });
 }
 
 function getStylesFromPage(fullpage) {
 	const { color, background } = window.getComputedStyle(fullpage);
-	ipcRenderer.sendToHost('sidebar-style', { color, background });
+	sendStyle({ color, background });
 }
 
 function createStylesObserver(element, getStylesFrom) {
