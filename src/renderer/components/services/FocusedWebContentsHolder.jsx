@@ -1,5 +1,5 @@
 import { remote } from 'electron';
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 
 const { getCurrentWebContents } = remote;
@@ -20,6 +20,22 @@ export const useSetFocusedWebContents = () => {
 
 export function FocusedWebContentsHolder({ children }) {
 	const stateAndSetter = useState(mainWindowWebContents);
+
+	const handleWindowFocusRef = useRef();
+	handleWindowFocusRef.current = () => {
+		const [focusedWebContents] = stateAndSetter;
+		focusedWebContents.focus();
+	};
+
+	useEffect(() => {
+		const handleWindowFocus = () => handleWindowFocusRef.current.call();
+
+		window.addEventListener('focus', handleWindowFocus);
+
+		return () => {
+			window.removeEventListener('focus', handleWindowFocus);
+		};
+	}, []);
 
 	return <FocusedWebContentsContext.Provider value={stateAndSetter}>
 		{children}

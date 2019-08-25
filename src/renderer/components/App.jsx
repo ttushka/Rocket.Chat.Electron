@@ -1,5 +1,5 @@
 import { remote, shell } from 'electron';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { LoadingSplash } from './LoadingSplash';
 import { showMessageBox, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
@@ -62,8 +62,6 @@ const { app, getCurrentWebContents } = remote;
 function AppInner() {
 	const mainWindow = useMainWindow();
 
-	const { t } = useTranslation();
-
 	const {
 		canUpdate,
 		canSetCheckForUpdatesOnStart,
@@ -98,20 +96,11 @@ function AppInner() {
 
 	const activateMainWindow = useActivateMainWindow();
 
-	useEffect(() => {
-		const handleFocus = () => {
-			focusedWebContents.focus();
-		};
-		window.addEventListener('focus', handleFocus);
-
-		return () => {
-			window.removeEventListener('focus', handleFocus);
-		};
-	}, [focusedWebContents]);
-
 	useAutoUpdaterEvent('update-available', () => {
 		setOpenModal('update');
 	});
+
+	const { t } = useTranslation();
 
 	useAutoUpdaterEvent('update-downloaded', async () => {
 		const { response } = await showMessageBox({
@@ -474,18 +463,18 @@ export function App() {
 		<React.Suspense fallback={<LoadingSplash />}>
 			<PreferencesProvider>
 				<ServersProvider>
-					<AutoUpdaterHandler>
-						<CertificatesHandler>
-							<DeepLinkingHandler>
-								<BasicAuthenticationHandler />
-								<FocusedWebContentsHolder>
-									<MainWindow>
+					<MainWindow>
+						<AutoUpdaterHandler>
+							<CertificatesHandler>
+								<DeepLinkingHandler>
+									<BasicAuthenticationHandler />
+									<FocusedWebContentsHolder>
 										<AppInner />
-									</MainWindow>
-								</FocusedWebContentsHolder>
-							</DeepLinkingHandler>
-						</CertificatesHandler>
-					</AutoUpdaterHandler>
+									</FocusedWebContentsHolder>
+								</DeepLinkingHandler>
+							</CertificatesHandler>
+						</AutoUpdaterHandler>
+					</MainWindow>
 				</ServersProvider>
 			</PreferencesProvider>
 		</React.Suspense>
