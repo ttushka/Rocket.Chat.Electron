@@ -14,8 +14,12 @@ import { showOpenDialog, showErrorBox } from '../../dialogs';
 import { useTranslation } from 'react-i18next';
 import { reportError } from '../../../errorHandling';
 import { shell, clipboard } from 'electron';
-import { useServers } from '../services/ServersProvider';
+import { useServers, useServersActions } from '../services/ServersProvider';
 import { usePreferences } from '../services/PreferencesProvider';
+import { useSetFocusedWebContents, useFocusedWebContents } from '../services/FocusedWebContentsHolder';
+import { useSetOpenModal } from '../services/OpenModalState';
+import { useActivateMainWindow, useMainWindow } from '../MainWindow';
+import { useSetOpenView } from '../services/OpenViewState';
 
 
 const Markup = React.memo(() =>
@@ -36,6 +40,13 @@ export const WebViewsView = React.lazy(async () => {
 		const servers = useServers();
 		const activeServerURL = useMemo(() => (servers.find(({ isActive }) => isActive) || {}).url, [servers]);
 		const { isSideBarVisible } = usePreferences();
+		const { setServerProperties, setActiveServerURL } = useServersActions();
+		const setFocusedWebContents = useSetFocusedWebContents();
+		const setOpenModal = useSetOpenModal();
+		const activateMainWindow = useActivateMainWindow();
+		const setOpenView = useSetOpenView();
+		const focusedWebContents = useFocusedWebContents();
+		const mainWindow = useMainWindow();
 
 		const { t } = useTranslation();
 
@@ -113,6 +124,34 @@ export const WebViewsView = React.lazy(async () => {
 						},
 					});
 					contextMenu.trigger();
+				},
+				onBadgeChange: (serverURL, badge) => {
+					setServerProperties(serverURL, { badge });
+				},
+				onBlur: () => {
+					setFocusedWebContents(mainWindow.webContents);
+				},
+				onFocus: (serverURL, webContents) => {
+					setFocusedWebContents(webContents);
+				},
+				onRequestScreenSharing: () => {
+					setOpenModal('screenSharing');
+				},
+				onSideBarStyleChange: (serverURL, style) => {
+					setServerProperties(serverURL, { style });
+				},
+				onRequestFocus: (serverURL) => {
+					activateMainWindow();
+					setActiveServerURL(serverURL);
+					setOpenView('webViews');
+					setFocusedWebContents(focusedWebContents);
+					focusedWebContents.focus();
+				},
+				onTitleChange: (serverURL, title) => {
+					setServerProperties(serverURL, { title });
+				},
+				onNavigate: (serverURL, url) => {
+					setServerProperties(serverURL, { lastPath: url });
 				},
 			});
 		});

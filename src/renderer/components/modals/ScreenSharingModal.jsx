@@ -2,6 +2,8 @@ import { desktopCapturer } from 'electron';
 import React, { useEffect } from 'react';
 import { t } from 'i18next';
 import { reportError } from '../../../errorHandling';
+import { useOpenModal, useSetOpenModal } from '../services/OpenModalState';
+import { useFocusedWebContents } from '../services/FocusedWebContentsHolder';
 
 
 let props = {
@@ -109,9 +111,23 @@ const Markup = React.memo(() =>
 );
 Markup.displayName = 'Markup';
 
-export function ScreenSharingModal(props) {
+export function ScreenSharingModal() {
+	const openModal = useOpenModal();
+	const setOpenModal = useSetOpenModal();
+	const focusedWebContents = useFocusedWebContents();
+
 	useEffect(() => {
-		setProps(props);
+		setProps({
+			visible: openModal === 'screenSharing',
+			onDismiss: () => {
+				setOpenModal(null);
+				focusedWebContents.send('screenshare-result', 'PermissionDeniedError');
+			},
+			onSelectScreenSharingSource: (id) => {
+				setOpenModal(null);
+				focusedWebContents.send('screenshare-result', id);
+			},
+		});
 	});
 
 	return <Markup />;

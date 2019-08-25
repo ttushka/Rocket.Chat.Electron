@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { t } from 'i18next';
 import { copyright } from '../../../../package.json';
 import { useAppVersion } from '../../hooks/useAppVersion';
-import { useAutoUpdaterState, useAutoUpdaterEvent } from '../services/AutoUpdaterHandler';
+import { useAutoUpdaterState, useAutoUpdaterEvent, useAutoUpdaterActions } from '../services/AutoUpdaterHandler';
+import { useOpenModal, useSetOpenModal } from '../services/OpenModalState.jsx';
 
 
 let props = {
@@ -136,7 +137,7 @@ const Markup = React.memo(() =>
 );
 Markup.displayName = 'Markup';
 
-export function AboutModal(props) {
+export function AboutModal() {
 	const {
 		canUpdate,
 		isCheckingForUpdates,
@@ -145,6 +146,12 @@ export function AboutModal(props) {
 	} = useAutoUpdaterState();
 	const appVersion = useAppVersion();
 	const [updateMessage, setUpdateMessage] = useState(null);
+	const openModal = useOpenModal();
+	const setOpenModal = useSetOpenModal();
+	const {
+		checkForUpdates,
+		setCheckForUpdatesOnStart,
+	} = useAutoUpdaterActions();
 
 	useAutoUpdaterEvent('update-not-available', () => {
 		setUpdateMessage(t('dialog.about.noUpdatesAvailable'));
@@ -162,7 +169,24 @@ export function AboutModal(props) {
 			currentVersion: appVersion,
 			isCheckingForUpdates,
 			updateMessage,
-			...props,
+			visible: openModal === 'about',
+			onDismiss: () => {
+				setOpenModal(null);
+			},
+			onClickCheckForUpdates: () => {
+				if (!canUpdate || isCheckingForUpdates) {
+					return;
+				}
+
+				checkForUpdates();
+			},
+			onToggleCheckForUpdatesOnStart: (isEnabled) => {
+				if (!canSetCheckForUpdatesOnStart) {
+					return;
+				}
+
+				setCheckForUpdatesOnStart(isEnabled);
+			},
 		});
 	});
 

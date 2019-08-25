@@ -3,7 +3,9 @@ import { t } from 'i18next';
 import React, { useEffect, useMemo } from 'react';
 import { parse as parseURL } from 'url';
 import { usePreferences } from './services/PreferencesProvider';
-import { useServers, useActiveServer } from './services/ServersProvider';
+import { useServers, useActiveServer, useServersActions } from './services/ServersProvider';
+import { useReloadWebView, useOpenDevToolsForWebView } from './views/WebViewsView';
+import { useSetOpenView } from './services/OpenViewState';
 
 
 const { getCurrentWindow, Menu } = remote;
@@ -260,13 +262,17 @@ const Markup = React.memo(() =>
 );
 Markup.displayName = 'Markup';
 
-export function SideBar(props) {
+export function SideBar() {
 	const { isSideBarVisible } = usePreferences();
 	const servers = useServers();
 	const activeServer = useActiveServer();
 	const activeServerURL = useMemo(() => (activeServer || {}).url, [servers]);
 	const styles = useMemo(() => servers.reduce((styles, { url, style }) => ({ ...styles, [url]: style }), {}), [servers]);
 	const badges = useMemo(() => servers.reduce((styles, { url, badge }) => ({ ...styles, [url]: badge }), {}), [servers]);
+	const reloadWebView = useReloadWebView();
+	const openDevToolsForWebView = useOpenDevToolsForWebView();
+	const { removeServer, sortServers, setActiveServerURL } = useServersActions();
+	const setOpenView = useSetOpenView();
 
 	useEffect(() => {
 		setProps({
@@ -275,7 +281,26 @@ export function SideBar(props) {
 			activeServerURL,
 			styles,
 			badges,
-			...props,
+			onClickReloadServer: (serverURL) => {
+				reloadWebView(serverURL);
+			},
+			onClickRemoveServer:(serverURL) => {
+				removeServer(serverURL);
+			},
+			onClickOpenDevToolsForServer: (serverURL) => {
+				openDevToolsForWebView(serverURL);
+			},
+			onSortServers:(serverURLs) => {
+				sortServers(serverURLs);
+			},
+			onClickAddServer: () => {
+				setActiveServerURL(null);
+				setOpenView('landing');
+			},
+			onClickServer:(serverURL) => {
+				setActiveServerURL(serverURL);
+				setOpenView('webViews');
+			},
 		});
 	});
 

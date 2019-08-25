@@ -1,11 +1,17 @@
-import { remote } from 'electron';
+import { remote, shell } from 'electron';
 import { t } from 'i18next';
 import { useEffect, useMemo } from 'react';
 import { useAppName } from '../hooks/useAppName';
-import { useServers, useActiveServer } from './services/ServersProvider';
-import { usePreferences } from './services/PreferencesProvider';
-import { useMainWindowState } from './MainWindow';
+import { useServers, useActiveServer, useServersActions } from './services/ServersProvider';
+import { usePreferences, useMergePreferences } from './services/PreferencesProvider';
+import { useMainWindowState, useMainWindow, useActivateMainWindow } from './MainWindow';
 import { useFocusedWebContents } from './services/FocusedWebContentsHolder';
+import { useSetOpenModal } from './services/OpenModalState';
+import { useQuitApp } from '../hooks/useQuitApp';
+import { useClearCertificates } from './services/CertificatesHandler';
+import { showMessageBox } from '../dialogs';
+import { requestAppDataReset } from '../userData';
+import { useSetOpenView } from './services/OpenViewState';
 
 
 const { getCurrentWindow, Menu } = remote;
@@ -359,9 +365,7 @@ const setProps = (partialProps) => {
 	}
 };
 
-
-
-export function MenuBar(props) {
+export function MenuBar() {
 	const appName = useAppName();
 	const servers = useServers();
 	const activeServer = useActiveServer();
@@ -374,6 +378,14 @@ export function MenuBar(props) {
 	} = usePreferences();
 	const { isFullScreen } = useMainWindowState();
 	const focusedWebContents = useFocusedWebContents();
+	const setOpenModal = useSetOpenModal();
+	const quitApp = useQuitApp();
+	const mainWindow = useMainWindow();
+	const clearCertificates = useClearCertificates();
+	const activateMainWindow = useActivateMainWindow();
+	const { setActiveServerURL } = useServersActions();
+	const setOpenView = useSetOpenView();
+	const mergePreferences = useMergePreferences();
 
 	useEffect(() => {
 		setProps({
@@ -386,7 +398,128 @@ export function MenuBar(props) {
 			showWindowOnUnreadChanged,
 			appName,
 			webContents: focusedWebContents,
-			...props,
+			onClickShowAbout: () => {
+				setOpenModal('about');
+			},
+			onClickQuit: () => {
+				quitApp();
+			},
+			onClickUndo: (webContents) => {
+				webContents.undo();
+			},
+			onClickRedo: (webContents) => {
+				webContents.redo();
+			},
+			onClickCut: (webContents) => {
+				webContents.cut();
+			},
+			onClickCopy: (webContents) => {
+				webContents.copy();
+			},
+			onClickPaste: (webContents) => {
+				webContents.paste();
+			},
+			onClickSelectAll: (webContents) => {
+				webContents.selectAll();
+			},
+			onClickReload: (webContents) => {
+				if (webContents === mainWindow.webContents) {
+					return;
+				}
+				webContents.reload();
+			},
+			onClickReloadIgnoringCache: (webContents) => {
+				if (webContents === mainWindow.webContents) {
+					return;
+				}
+				webContents.reloadIgnoringCache();
+			},
+			onClickClearCertificates: () => {
+				clearCertificates();
+			},
+			onClickOpenDevToolsForServer: (webContents) => {
+				if (webContents === mainWindow.webContents) {
+					return;
+				}
+				webContents.openDevTools();
+			},
+			onClickGoBack: (webContents) => {
+				if (webContents === mainWindow.webContents) {
+					return;
+				}
+				webContents.goBack();
+			},
+			onClickGoForward: (webContents) => {
+				if (webContents === mainWindow.webContents) {
+					return;
+				}
+				webContents.goForward();
+			},
+			onToggleFullScreen: (isEnabled) => {
+				mainWindow.setFullScreen(isEnabled);
+			},
+			onClickResetZoom: () => {
+				mainWindow.webContents.setZoomLevel(0);
+			},
+			onClickZoomIn: () => {
+				const newZoomLevel = Math.min(mainWindow.webContents.getZoomLevel() + 1, 9);
+				mainWindow.webContents.setZoomLevel(newZoomLevel);
+			},
+			onClickZoomOut: () => {
+				const newZoomLevel = Math.max(mainWindow.webContents.getZoomLevel() - 1, -9);
+				mainWindow.webContents.setZoomLevel(newZoomLevel);
+			},
+			onClickReloadApp: () => {
+				mainWindow.webContents.reloadIgnoringCache();
+			},
+			onToggleAppDevTools: () => {
+				mainWindow.webContents.toggleDevTools();
+			},
+			onClickOpenURL: (url) => {
+				shell.openExternal(url);
+			},
+			onClickResetAppData: async () => {
+				const { response } = await showMessageBox({
+					type: 'question',
+					buttons: [
+						t('dialog.resetAppData.yes'),
+						t('dialog.resetAppData.cancel'),
+					],
+					defaultId: 1,
+					title: t('dialog.resetAppData.title'),
+					message: t('dialog.resetAppData.message'),
+				});
+
+				const mustResetAppData = response === 0;
+
+				if (!mustResetAppData) {
+					return;
+				}
+
+				requestAppDataReset();
+			},
+			onClickAddNewServer: () => {
+				activateMainWindow();
+				setActiveServerURL(null);
+				setOpenView('landing');
+			},
+			onToggleTrayIcon: (isEnabled) => {
+				mergePreferences({ hasTrayIcon: isEnabled });
+			},
+			onToggleMenuBar: (isEnabled) => {
+				mergePreferences({ isMenuBarVisible: isEnabled });
+			},
+			onToggleSideBar: (isEnabled) => {
+				mergePreferences({ isSideBarVisible: isEnabled });
+			},
+			onClickSelectServer: ({ url }) => {
+				activateMainWindow();
+				setActiveServerURL(url);
+				setOpenView('webViews');
+			},
+			onToggleShowWindowOnUnreadChanged: (isEnabled) => {
+				mergePreferences({ showWindowOnUnreadChanged: isEnabled });
+			},
 		});
 	});
 

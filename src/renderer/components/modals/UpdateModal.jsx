@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { useAppVersion } from '../../hooks/useAppVersion';
-import { useAutoUpdaterState } from '../services/AutoUpdaterHandler';
+import { useAutoUpdaterState, useAutoUpdaterActions } from '../services/AutoUpdaterHandler';
 import { t } from 'i18next';
+import { useOpenModal, useSetOpenModal } from '../services/OpenModalState';
+import { showMessageBox } from '../../dialogs';
 
 
 let props = {
@@ -112,15 +114,49 @@ const Markup = React.memo(() =>
 );
 Markup.displayName = 'Markup';
 
-export function UpdateModal(props) {
+export function UpdateModal() {
 	const appVersion = useAppVersion();
 	const { newVersion } = useAutoUpdaterState();
+	const openModal = useOpenModal();
+	const setOpenModal = useSetOpenModal();
+	const {
+		downloadUpdate,
+		setSkippedVersion,
+	} = useAutoUpdaterActions();
 
 	useEffect(() => {
 		setProps({
 			currentVersion: appVersion,
 			newVersion,
-			...props,
+			visible:openModal === 'update',
+			onDismiss: () => {
+				setOpenModal(null);
+			},
+			onSkipUpdateVersion: async (version) => {
+				await showMessageBox({
+					type: 'warning',
+					title: t('dialog.updateSkip.title'),
+					message: t('dialog.updateSkip.message'),
+					buttons: [t('dialog.updateSkip.ok')],
+					defaultId: 0,
+				});
+				setSkippedVersion(version);
+				setOpenModal(null);
+			},
+			onRemindUpdateLater:() => {
+				setOpenModal(null);
+			},
+			onInstallUpdate:async () => {
+				await showMessageBox({
+					type: 'info',
+					title: t('dialog.updateDownloading.title'),
+					message: t('dialog.updateDownloading.message'),
+					buttons: [t('dialog.updateDownloading.ok')],
+					defaultId: 0,
+				});
+				downloadUpdate();
+				setOpenModal(null);
+			},
 		});
 	});
 
