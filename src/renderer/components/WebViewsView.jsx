@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import webview from '../webview';
 import contextMenu from '../contextMenu';
 import {
@@ -14,6 +14,8 @@ import { showOpenDialog, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
 import { reportError } from '../../errorHandling';
 import { shell, clipboard } from 'electron';
+import { useServers } from './services/ServersProvider';
+import { usePreferences } from './services/PreferencesProvider';
 
 
 const Markup = React.memo(() =>
@@ -29,10 +31,17 @@ export const WebViewsView = React.lazy(async () => {
 	await setupSpellChecking();
 
 	function WebViewsView(props) {
+		const servers = useServers();
+		const activeServerURL = useMemo(() => (servers.find(({ isActive }) => isActive) || {}).url, [servers]);
+		const { isSideBarVisible } = usePreferences();
+
 		const { t } = useTranslation();
 
 		useEffect(() => {
 			webview.setProps({
+				servers,
+				activeServerURL,
+				hasSideBarPadding: !isSideBarVisible,
 				...props,
 				onContextMenu: (serverURL, webContents, params) => {
 					contextMenu.setProps({

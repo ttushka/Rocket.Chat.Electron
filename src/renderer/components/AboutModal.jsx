@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import aboutModal from '../aboutModal';
+import { useAppVersion } from '../hooks/useAppVersion';
+import { useAutoUpdaterState } from './services/AutoUpdaterHandler';
 
 
 const Markup = React.memo(() =>
@@ -36,8 +38,23 @@ const Markup = React.memo(() =>
 Markup.displayName = 'Markup';
 
 export function AboutModal(props) {
+	const {
+		canUpdate,
+		isCheckingForUpdates,
+		doesCheckForUpdatesOnStart,
+		canSetCheckForUpdatesOnStart,
+	} = useAutoUpdaterState();
+	const appVersion = useAppVersion();
+
 	useEffect(() => {
-		aboutModal.setProps(props);
+		aboutModal.setProps({
+			canUpdate,
+			canAutoUpdate: doesCheckForUpdatesOnStart,
+			canSetAutoUpdate: canSetCheckForUpdatesOnStart,
+			currentVersion: appVersion,
+			isCheckingForUpdates,
+			...props,
+		});
 	});
 
 	return <Markup />;

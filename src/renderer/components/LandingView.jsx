@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import landingView from '../landingView';
+import { useServers, useServersActions, useServerValidation } from './services/ServersProvider';
 
 
 const Markup = React.memo(() =>
@@ -38,9 +39,19 @@ const Markup = React.memo(() =>
 );
 Markup.displayName = 'Markup';
 
-export function LandingView(props) {
+export function LandingView() {
+	const servers = useServers();
+	const visible = useMemo(() => servers.some(({ isActive }) => isActive), [servers]);
+
+	const { addServer } = useServersActions();
+	const validateServerURL = useServerValidation();
+
 	useEffect(() => {
-		landingView.setProps(props);
+		landingView.setProps({
+			visible,
+			addServer,
+			validateServerURL,
+		});
 	});
 
 	return <Markup />;

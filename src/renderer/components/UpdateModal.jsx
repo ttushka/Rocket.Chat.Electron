@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import updateModal from '../updateModal';
+import { useAppVersion } from '../hooks/useAppVersion';
+import { useAutoUpdaterState } from './services/AutoUpdaterHandler';
 
 
 const Markup = React.memo(() =>
@@ -31,8 +33,15 @@ const Markup = React.memo(() =>
 Markup.displayName = 'Markup';
 
 export function UpdateModal(props) {
+	const appVersion = useAppVersion();
+	const { newVersion } = useAutoUpdaterState();
+
 	useEffect(() => {
-		updateModal.setProps(props);
+		updateModal.setProps({
+			currentVersion: appVersion,
+			newVersion,
+			...props,
+		});
 	});
 
 	return <Markup />;

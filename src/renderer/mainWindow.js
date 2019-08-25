@@ -180,8 +180,6 @@ const attachWindowStateHandling = async (mainWindow) => {
 
 	const handleStateChange = () => {
 		windowStateHandler.fetchAndSave();
-		const { onStateChange } = props;
-		onStateChange && onStateChange(windowStateHandler.state);
 	};
 
 	mainWindow.on('resize', handleStateChange);

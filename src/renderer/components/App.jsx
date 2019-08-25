@@ -25,8 +25,8 @@ import {
 } from './services/AutoUpdaterHandler';
 import {
 	CertificatesHandler,
-	useCertificateTrustRequestHandler,
 	useClearCertificates,
+	useCertificateTrustRequestHandler,
 } from './services/CertificatesHandler';
 import { SideBar } from './SideBar';
 import { DragBar } from './DragBar.styles';
@@ -58,14 +58,9 @@ const { app, getCurrentWebContents, getCurrentWindow } = remote;
 function AppInner() {
 	const { t } = useTranslation();
 
-	const isMainWindowVisible = getCurrentWindow().isVisible();
-	const isMainWindowFullScreen = getCurrentWindow().isFullScreen();
-
 	const {
 		canUpdate,
 		canSetCheckForUpdatesOnStart,
-		doesCheckForUpdatesOnStart,
-		newVersion,
 		isCheckingForUpdates,
 	} = useAutoUpdaterState();
 
@@ -79,45 +74,14 @@ function AppInner() {
 		setCheckForUpdatesOnStart,
 	} = useAutoUpdaterActions();
 
-	useCertificateTrustRequestHandler(async (webContents, certificateUrl, error, certificate, isReplacing) => {
-		const { issuerName } = certificate || {};
-
-		const title = t('dialog.certificateError.title');
-		const message = t('dialog.certificateError.message', {
-			issuerName,
-		});
-		let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
-		if (isReplacing) {
-			detail = t('error.differentCertificate', { detail });
-		}
-
-		const { response } = await showMessageBox({
-			title,
-			message,
-			detail,
-			type: 'warning',
-			buttons: [
-				t('dialog.certificateError.yes'),
-				t('dialog.certificateError.no'),
-			],
-			cancelId: 1,
-		});
-
-		return response === 0;
-	});
-
 	const [sideBarStyles, setSideBarStyles] = useState({});
 	const [badges, setBadges] = useState({});
 	const [openModal, setOpenModal] = useState(null);
 	const [webContents, setWebContents] = useState(getCurrentWebContents());
 
-	const [, _update] = useState(0);
-	const update = () => _update((count) => count + 1);
-
 	const {
 		showWindowOnUnreadChanged,
 		hasTrayIcon,
-		isMenuBarVisible,
 		isSideBarVisible,
 	} = usePreferences();
 
@@ -197,6 +161,33 @@ function AppInner() {
 		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
 	});
 
+	useCertificateTrustRequestHandler(async (webContents, certificateUrl, error, certificate, isReplacing) => {
+		const { issuerName } = certificate || {};
+
+		const title = t('dialog.certificateError.title');
+		const message = t('dialog.certificateError.message', {
+			issuerName,
+		});
+		let detail = `URL: ${ certificateUrl }\nError: ${ error }`;
+		if (isReplacing) {
+			detail = t('error.differentCertificate', { detail });
+		}
+
+		const { response } = await showMessageBox({
+			title,
+			message,
+			detail,
+			type: 'warning',
+			buttons: [
+				t('dialog.certificateError.yes'),
+				t('dialog.certificateError.no'),
+			],
+			cancelId: 1,
+		});
+
+		return response === 0;
+	});
+
 	useDeepLinkingEvent('add-server', async (serverURL) => {
 		activateMainWindow();
 		if (servers.some(({ url }) => url === serverURL)) {
@@ -232,18 +223,10 @@ function AppInner() {
 		hasTrayIcon={hasTrayIcon}
 		showWindowOnUnreadChanged={showWindowOnUnreadChanged}
 		badge={globalBadge}
-		onStateChange={update}
+		// onStateChange={update}
 	>
 		<MenuBar
-			servers={servers}
-			activeServerURL={activeServerURL}
-			hasTrayIcon={hasTrayIcon}
-			isFullScreen={isMainWindowFullScreen}
-			isMenuBarVisible={isMenuBarVisible}
-			isSideBarVisible={isSideBarVisible}
-			showWindowOnUnreadChanged={showWindowOnUnreadChanged}
 			webContents={webContents}
-			appName={app.getName()}
 			onClickShowAbout={() => {
 				setOpenModal('about');
 			}}
@@ -392,9 +375,6 @@ function AppInner() {
 			}}
 		/>
 		<WebViewsView
-			servers={servers}
-			activeServerURL={activeServerURL}
-			hasSideBarPadding={!isSideBarVisible}
 			onBadgeChange={(serverURL, badge) => {
 				setBadges({
 					...badges,
@@ -429,18 +409,9 @@ function AppInner() {
 				setServerProperties(serverURL, { lastPath: url });
 			}}
 		/>
-		<LandingView
-			visible={!activeServerURL}
-			addServer={addServer}
-			validateServerURL={validateServerURL}
-		/>
+		<LandingView />
 		<AboutModal
 			visible={openModal === 'about'}
-			canUpdate={canUpdate}
-			canAutoUpdate={doesCheckForUpdatesOnStart}
-			canSetAutoUpdate={canSetCheckForUpdatesOnStart}
-			currentVersion={app.getVersion()}
-			isCheckingForUpdates={isCheckingForUpdates}
 			updateMessage={updateMessage}
 			onDismiss={() => {
 				setOpenModal(null);
@@ -462,8 +433,6 @@ function AppInner() {
 		/>
 		<UpdateModal
 			visible={openModal === 'update'}
-			currentVersion={app.getVersion()}
-			newVersion={newVersion}
 			onDismiss={() => {
 				setOpenModal(null);
 			}}
@@ -505,13 +474,9 @@ function AppInner() {
 			}}
 		/>
 		<Dock
-			hasTrayIcon={hasTrayIcon}
 			badge={globalBadge}
 		/>
 		<TrayIcon
-			visible={hasTrayIcon}
-			appName={app.getName()}
-			isMainWindowVisible={isMainWindowVisible}
 			badge={globalBadge}
 			onToggleMainWindow={(isVisible) => {
 				if (isVisible) {
