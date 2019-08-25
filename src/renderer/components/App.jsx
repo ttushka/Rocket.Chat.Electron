@@ -1,18 +1,16 @@
 import { remote, shell } from 'electron';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LoadingSplash } from './LoadingSplash';
 import { showMessageBox, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
 import { requestAppDataReset } from '../userData';
 import {
 	PreferencesProvider,
-	usePreferences,
 	useMergePreferences,
 } from './services/PreferencesProvider';
 import {
 	ServersProvider,
 	useServers,
-	useActiveServer,
 	useServersActions,
 	useServerValidation,
 } from './services/ServersProvider';
@@ -43,6 +41,7 @@ import { Dock } from './Dock';
 import {
 	MainWindow,
 	useActivateMainWindow,
+	useMainWindow,
 } from './MainWindow';
 import { MenuBar } from './MenuBar';
 import { TouchBar } from './TouchBar';
@@ -51,11 +50,18 @@ import {
 	DeepLinkingHandler,
 	useDeepLinkingEvent,
 } from './services/DeepLinkingHandler';
+import {
+	FocusedWebContentsHolder,
+	useFocusedWebContents,
+	useSetFocusedWebContents,
+} from './services/FocusedWebContentsHolder';
 
 
-const { app, getCurrentWebContents, getCurrentWindow } = remote;
+const { app, getCurrentWebContents } = remote;
 
 function AppInner() {
+	const mainWindow = useMainWindow();
+
 	const { t } = useTranslation();
 
 	const {
@@ -63,8 +69,6 @@ function AppInner() {
 		canSetCheckForUpdatesOnStart,
 		isCheckingForUpdates,
 	} = useAutoUpdaterState();
-
-	const [updateMessage, setUpdateMessage] = useState(null);
 
 	const {
 		checkForUpdates,
@@ -74,29 +78,13 @@ function AppInner() {
 		setCheckForUpdatesOnStart,
 	} = useAutoUpdaterActions();
 
-	const [sideBarStyles, setSideBarStyles] = useState({});
-	const [badges, setBadges] = useState({});
 	const [openModal, setOpenModal] = useState(null);
-	const [webContents, setWebContents] = useState(getCurrentWebContents());
-
-	const {
-		showWindowOnUnreadChanged,
-		hasTrayIcon,
-		isSideBarVisible,
-	} = usePreferences();
+	const focusedWebContents = useFocusedWebContents();
+	const setFocusedWebContents = useSetFocusedWebContents();
 
 	const mergePreferences = useMergePreferences();
 
-	const mentionCount = useMemo(() => Object.values(badges)
-		.filter((badge) => Number.isInteger(badge))
-		.reduce((sum, count) => sum + count, 0), [badges]
-	);
-	const globalBadge = useMemo(() => mentionCount
-		|| (Object.values(badges).some((badge) => !!badge) && '•')
-		|| null, []);
-
 	const servers = useServers();
-	const { url: activeServerURL } = useActiveServer() || {};
 	const {
 		addServer,
 		removeServer,
@@ -112,21 +100,17 @@ function AppInner() {
 
 	useEffect(() => {
 		const handleFocus = () => {
-			webContents.focus();
+			focusedWebContents.focus();
 		};
 		window.addEventListener('focus', handleFocus);
 
 		return () => {
 			window.removeEventListener('focus', handleFocus);
 		};
-	}, [webContents]);
+	}, [focusedWebContents]);
 
 	useAutoUpdaterEvent('update-available', () => {
 		setOpenModal('update');
-	});
-
-	useAutoUpdaterEvent('update-not-available', () => {
-		setUpdateMessage(t('dialog.about.noUpdatesAvailable'));
 	});
 
 	useAutoUpdaterEvent('update-downloaded', async () => {
@@ -152,13 +136,9 @@ function AppInner() {
 			return;
 		}
 
-		getCurrentWindow().removeAllListeners();
+		mainWindow.removeAllListeners();
 		app.removeAllListeners('window-all-closed');
 		quitAndInstallUpdate();
-	});
-
-	useAutoUpdaterEvent('error', () => {
-		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
 	});
 
 	useCertificateTrustRequestHandler(async (webContents, certificateUrl, error, certificate, isReplacing) => {
@@ -219,14 +199,8 @@ function AppInner() {
 
 	const openDevToolsForWebView = useOpenDevToolsForWebView();
 
-	return <MainWindow
-		hasTrayIcon={hasTrayIcon}
-		showWindowOnUnreadChanged={showWindowOnUnreadChanged}
-		badge={globalBadge}
-		// onStateChange={update}
-	>
+	return <>
 		<MenuBar
-			webContents={webContents}
 			onClickShowAbout={() => {
 				setOpenModal('about');
 			}}
@@ -285,7 +259,7 @@ function AppInner() {
 				webContents.goForward();
 			}}
 			onToggleFullScreen={(isEnabled) => {
-				getCurrentWindow().setFullScreen(isEnabled);
+				mainWindow.setFullScreen(isEnabled);
 			}}
 			onClickResetZoom={() => {
 				getCurrentWebContents().setZoomLevel(0);
@@ -328,7 +302,7 @@ function AppInner() {
 				requestAppDataReset();
 			}}
 			onClickAddNewServer={() => {
-				getCurrentWindow().show();
+				activateMainWindow();
 				setActiveServerURL(null);
 			}}
 			onToggleTrayIcon={(isEnabled) => {
@@ -341,7 +315,7 @@ function AppInner() {
 				mergePreferences({ isSideBarVisible: isEnabled });
 			}}
 			onClickSelectServer={({ url }) => {
-				getCurrentWindow().show();
+				activateMainWindow();
 				setActiveServerURL(url);
 			}}
 			onToggleShowWindowOnUnreadChanged={(isEnabled) => {
@@ -350,11 +324,6 @@ function AppInner() {
 		/>
 		<DragBar />
 		<SideBar
-			visible={isSideBarVisible}
-			servers={servers}
-			activeServerURL={activeServerURL}
-			styles={sideBarStyles}
-			badges={badges}
 			onClickReloadServer={(serverURL) => {
 				reloadWebView(serverURL);
 			}}
@@ -374,45 +343,40 @@ function AppInner() {
 				setActiveServerURL(serverURL);
 			}}
 		/>
-		<WebViewsView
-			onBadgeChange={(serverURL, badge) => {
-				setBadges({
-					...badges,
-					[serverURL]: badge || null,
-				});
-			}}
-			onBlur={() => {
-				setWebContents(getCurrentWebContents());
-			}}
-			onFocus={(serverURL, webContents) => {
-				setWebContents(webContents);
-			}}
-			onRequestScreenSharing={() => {
-				setOpenModal('screenSharing');
-			}}
-			onSideBarStyleChange={(serverURL, style) => {
-				setSideBarStyles({
-					...sideBarStyles,
-					[serverURL]: style || null,
-				});
-			}}
-			onRequestFocus={(serverURL) => {
-				activateMainWindow();
-				setActiveServerURL(serverURL);
-				setWebContents(webContents);
-				webContents.focus();
-			}}
-			onTitleChange={(serverURL, title) => {
-				setServerProperties(serverURL, { title });
-			}}
-			onNavigate={(serverURL, url) => {
-				setServerProperties(serverURL, { lastPath: url });
-			}}
-		/>
-		<LandingView />
+		<>
+			<WebViewsView
+				onBadgeChange={(serverURL, badge) => {
+					setServerProperties(serverURL, { badge });
+				}}
+				onBlur={() => {
+					setFocusedWebContents(getCurrentWebContents());
+				}}
+				onFocus={(serverURL, webContents) => {
+					setFocusedWebContents(webContents);
+				}}
+				onRequestScreenSharing={() => {
+					setOpenModal('screenSharing');
+				}}
+				onSideBarStyleChange={(serverURL, style) => {
+					setServerProperties(serverURL, { style });
+				}}
+				onRequestFocus={(serverURL) => {
+					activateMainWindow();
+					setActiveServerURL(serverURL);
+					setFocusedWebContents(focusedWebContents);
+					focusedWebContents.focus();
+				}}
+				onTitleChange={(serverURL, title) => {
+					setServerProperties(serverURL, { title });
+				}}
+				onNavigate={(serverURL, url) => {
+					setServerProperties(serverURL, { lastPath: url });
+				}}
+			/>
+			<LandingView />
+		</>
 		<AboutModal
 			visible={openModal === 'about'}
-			updateMessage={updateMessage}
 			onDismiss={() => {
 				setOpenModal(null);
 			}}
@@ -466,38 +430,33 @@ function AppInner() {
 			visible={openModal === 'screenSharing'}
 			onDismiss={() => {
 				setOpenModal(null);
-				webContents.send('screenshare-result', 'PermissionDeniedError');
+				focusedWebContents.send('screenshare-result', 'PermissionDeniedError');
 			}}
 			onSelectScreenSharingSource={(id) => {
 				setOpenModal(null);
-				webContents.send('screenshare-result', id);
+				focusedWebContents.send('screenshare-result', id);
 			}}
 		/>
-		<Dock
-			badge={globalBadge}
-		/>
+		<Dock />
 		<TrayIcon
-			badge={globalBadge}
 			onToggleMainWindow={(isVisible) => {
 				if (isVisible) {
-					getCurrentWindow().show();
+					mainWindow.show();
 					return;
 				}
 
-				getCurrentWindow().hide();
+				mainWindow.hide();
 			}}
 			onClickQuit={() => {
 				app.quit();
 			}}
 		/>
 		<TouchBar
-			servers={servers}
-			activeServerURL={activeServerURL}
 			onTouchFormattingButton={(buttonClass) => {
-				if (webContents === getCurrentWebContents()) {
+				if (focusedWebContents === getCurrentWebContents()) {
 					return;
 				}
-				webContents.executeJavaScript(`
+				focusedWebContents.executeJavaScript(`
 					var svg = document.querySelector("button svg[class$='${ buttonClass }']");
 					svg && svg.parentNode.click();
 					`.trim()
@@ -507,7 +466,7 @@ function AppInner() {
 				setActiveServerURL(serverURL);
 			}}
 		/>
-	</MainWindow>;
+	</>;
 }
 
 export function App() {
@@ -519,7 +478,11 @@ export function App() {
 						<CertificatesHandler>
 							<DeepLinkingHandler>
 								<BasicAuthenticationHandler />
-								<AppInner />
+								<FocusedWebContentsHolder>
+									<MainWindow>
+										<AppInner />
+									</MainWindow>
+								</FocusedWebContentsHolder>
 							</DeepLinkingHandler>
 						</CertificatesHandler>
 					</AutoUpdaterHandler>

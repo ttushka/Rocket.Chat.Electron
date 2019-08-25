@@ -2,9 +2,10 @@ import { remote } from 'electron';
 import { t } from 'i18next';
 import { useEffect, useMemo } from 'react';
 import { useAppName } from '../hooks/useAppName';
-import { useServers } from './services/ServersProvider';
+import { useServers, useActiveServer } from './services/ServersProvider';
 import { usePreferences } from './services/PreferencesProvider';
 import { useMainWindowState } from './MainWindow';
+import { useFocusedWebContents } from './services/FocusedWebContentsHolder';
 
 
 const { getCurrentWindow, Menu } = remote;
@@ -363,7 +364,8 @@ const setProps = (partialProps) => {
 export function MenuBar(props) {
 	const appName = useAppName();
 	const servers = useServers();
-	const activeServerURL = useMemo(() => (servers.find(({ isActive }) => isActive) || {}).url, [servers]);
+	const activeServer = useActiveServer();
+	const activeServerURL = useMemo(() => (activeServer || {}).url, [servers]);
 	const {
 		showWindowOnUnreadChanged,
 		hasTrayIcon,
@@ -371,6 +373,7 @@ export function MenuBar(props) {
 		isSideBarVisible,
 	} = usePreferences();
 	const { isFullScreen } = useMainWindowState();
+	const focusedWebContents = useFocusedWebContents();
 
 	useEffect(() => {
 		setProps({
@@ -382,6 +385,7 @@ export function MenuBar(props) {
 			isSideBarVisible,
 			showWindowOnUnreadChanged,
 			appName,
+			webContents: focusedWebContents,
 			...props,
 		});
 	});

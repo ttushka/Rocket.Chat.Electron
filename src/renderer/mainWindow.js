@@ -1,237 +1,188 @@
 import { remote } from 'electron';
-import jetpack from 'fs-jetpack';
+import { readUserDataFile, writeUserDataFile } from './userData';
 
 
-const { app, getCurrentWebContents, getCurrentWindow } = remote;
+const { getCurrentWindow, screen } = remote;
 
-const activate = () => {
-	const mainWindow = getCurrentWindow();
-
-	if (process.platform === 'win32') {
-		if (mainWindow.isVisible()) {
-			mainWindow.focus();
-		} else if (mainWindow.isMinimized()) {
-			mainWindow.restore();
-		} else {
-			mainWindow.show();
-		}
-
-		return;
-	}
-
-	if (mainWindow.isMinimized()) {
-		mainWindow.restore();
-		return;
-	}
-
-	mainWindow.show();
-	mainWindow.focus();
-};
-
-class WindowStateHandler {
-	constructor(window, name) {
-		this.window = window;
-		this.name = name;
-		[this.defaultWidth, this.defaultHeight] = window.getSize();
-
-		this.state = {
-			width: this.defaultWidth,
-			height: this.defaultHeight,
-		};
-	}
-
-	async load() {
-		try {
-			const userDataDir = jetpack.cwd(remote.app.getPath('userData'));
-			this.state = {
-				...this.state,
-				...(await userDataDir.readAsync(`window-state-${ this.name }.json`, 'json') || {}),
-			};
-		} catch (error) {
-			console.error(`Failed to load "${ this.name }" window state`);
-			console.error(error);
-		}
-	}
-
-	async save() {
-		if (this.saveTimeout) {
-			clearTimeout(this.saveTimeout);
-			this.saveTimeout = null;
-		}
-
-		try {
-			const userDataDir = jetpack.cwd(remote.app.getPath('userData'));
-			await userDataDir.writeAsync(`window-state-${ this.name }.json`, this.state, {
-				atomic: true,
-			});
-		} catch (error) {
-			console.error(`Failed to save "${ this.name }" window state`);
-			console.error(error);
-		}
-	}
-
-	async fetch() {
-		const { state, window } = this;
-
-		if (window.isDestroyed()) {
-			return;
-		}
-
-		state.isMaximized = window.isMaximized();
-		state.isMinimized = window.isMinimized();
-		state.isHidden = !window.isMinimized() && !window.isVisible();
-
-		if (!state.isMaximized && !state.isHidden) {
-			[state.x, state.y] = window.getPosition();
-			[state.width, state.height] = window.getSize();
-		}
-	}
-
-	async apply() {
-		const { defaultWidth, defaultHeight, state, window } = this;
-
-		if (!this.isInsideSomeScreen()) {
-			const { bounds } = remote.screen.getPrimaryDisplay();
-			state.x = (bounds.width - defaultWidth) / 2;
-			state.y = (bounds.height - defaultHeight) / 2;
-			state.width = defaultWidth;
-			state.height = defaultHeight;
-		}
-
-		if (state.x !== undefined && state.y !== undefined) {
-			window.setPosition(Math.floor(state.x), Math.floor(state.y), false);
-		}
-
-		if (state.width !== undefined && state.height !== undefined) {
-			window.setSize(Math.floor(state.width), Math.floor(state.height), false);
-		}
-
-		if (state.isMaximized) {
-			window.maximize();
-		} else if (state.isMinimized) {
-			window.minimize();
-		} else {
-			window.restore();
-		}
-
-		if (state.isHidden) {
-			window.hide();
-		} else if (!state.isMinimized) {
-			window.show();
-		}
-	}
-
-	isInsideSomeScreen() {
-		const { state } = this;
-
-		return remote.screen.getAllDisplays()
-			.some(({ bounds }) => (
-				state.x >= bounds.x &&
-				state.y >= bounds.y &&
-				state.x + state.width <= bounds.x + bounds.width &&
-				state.y + state.height <= bounds.y + bounds.height
-			));
-	}
-
-	fetchAndSave() {
-		this.fetch();
-
-		if (this.saveTimeout) {
-			clearTimeout(this.saveTimeout);
-		}
-
-		this.saveTimeout = setTimeout(() => this.save(), 1000);
-	}
-}
-
-let props = {
+const currentWindow = getCurrentWindow();
+const mainWindowStateFileName = 'window-state-main.json';
+let saveTimeout;
+let defaultWidth;
+let defaultHeight;
+let mainWindowState;
+let mainWindowProps = {
 	hasTrayIcon: false,
+	badge: undefined,
+	showWindowOnUnreadChanged: false,
 };
 
-const attachWindowStateHandling = async (mainWindow) => {
-	const windowStateHandler = new WindowStateHandler(mainWindow, 'main');
-	await windowStateHandler.load();
-	windowStateHandler.apply();
+const loadMainWindowState = async () => {
+	try {
+		mainWindowState = {
+			...mainWindowState,
+			...(await readUserDataFile(mainWindowStateFileName, 'json') || {}),
+		};
+	} catch (error) {
+		console.error('Failed to load main window state');
+		console.error(error);
+	}
+};
+
+const saveMainWindowState = async () => {
+	if (saveTimeout) {
+		clearTimeout(saveTimeout);
+		saveTimeout = null;
+	}
+
+	try {
+		await writeUserDataFile(mainWindowStateFileName, mainWindowState);
+	} catch (error) {
+		console.error('Failed to save main window state');
+		console.error(error);
+	}
+};
+
+const fetchMainWindowState = async () => {
+	if (currentWindow.isDestroyed()) {
+		return;
+	}
+
+	mainWindowState.isMaximized = currentWindow.isMaximized();
+	mainWindowState.isMinimized = currentWindow.isMinimized();
+	mainWindowState.isHidden = !currentWindow.isMinimized() && !currentWindow.isVisible();
+
+	if (!mainWindowState.isMaximized && !mainWindowState.isHidden) {
+		[mainWindowState.x, mainWindowState.y] = currentWindow.getPosition();
+		[mainWindowState.width, mainWindowState.height] = currentWindow.getSize();
+	}
+};
+
+const isInsideSomeScreen = () => screen.getAllDisplays()
+	.some(({ bounds }) => (
+		mainWindowState.x >= bounds.x
+		&& mainWindowState.y >= bounds.y
+		&& mainWindowState.x + mainWindowState.width <= bounds.x + bounds.width
+		&& mainWindowState.y + mainWindowState.height <= bounds.y + bounds.height
+	));
+
+const applyMainWindowState = async () => {
+	if (!isInsideSomeScreen()) {
+		const { bounds } = screen.getPrimaryDisplay();
+		mainWindowState.x = (bounds.width - defaultWidth) / 2;
+		mainWindowState.y = (bounds.height - defaultHeight) / 2;
+		mainWindowState.width = defaultWidth;
+		mainWindowState.height = defaultHeight;
+	}
+
+	if (mainWindowState.x !== undefined && mainWindowState.y !== undefined) {
+		currentWindow.setPosition(Math.floor(mainWindowState.x), Math.floor(mainWindowState.y), false);
+	}
+
+	if (mainWindowState.width !== undefined && mainWindowState.height !== undefined) {
+		currentWindow.setSize(Math.floor(mainWindowState.width), Math.floor(mainWindowState.height), false);
+	}
+
+	if (mainWindowState.isMaximized) {
+		currentWindow.maximize();
+	} else if (mainWindowState.isMinimized) {
+		currentWindow.minimize();
+	} else {
+		currentWindow.restore();
+	}
+
+	if (mainWindowState.isHidden) {
+		currentWindow.hide();
+	} else if (!mainWindowState.isMinimized) {
+		currentWindow.show();
+	}
+};
+
+const fetchAndSave = () => {
+	fetchMainWindowState();
+
+	if (saveTimeout) {
+		clearTimeout(saveTimeout);
+	}
+
+	saveTimeout = setTimeout(saveMainWindowState, 1000);
+};
+
+const attachWindowStateHandling = async () => {
+	([defaultWidth, defaultHeight] = currentWindow.getSize());
+
+	mainWindowState = {
+		width: defaultWidth,
+		height: defaultHeight,
+	};
+
+	await loadMainWindowState();
+	applyMainWindowState();
 
 	const exitFullscreen = () => new Promise((resolve) => {
-		if (mainWindow.isFullScreen()) {
-			mainWindow.once('leave-full-screen', resolve);
-			mainWindow.setFullScreen(false);
+		if (currentWindow.isFullScreen()) {
+			currentWindow.once('leave-full-screen', resolve);
+			currentWindow.setFullScreen(false);
 			return;
 		}
 		resolve();
 	});
 
 	const close = () => {
-		mainWindow.blur();
+		currentWindow.blur();
 
-		if (process.platform === 'darwin' || props.hasTrayIcon) {
-			mainWindow.hide();
+		if (process.platform === 'darwin' || mainWindowProps.hasTrayIcon) {
+			currentWindow.hide();
 			return;
 		}
 
 		if (process.platform === 'win32') {
-			mainWindow.minimize();
+			currentWindow.minimize();
 			return;
 		}
 
-		mainWindow.destroy();
+		currentWindow.destroy();
 	};
 
 	const handleStateChange = () => {
-		windowStateHandler.fetchAndSave();
+		fetchAndSave();
 	};
 
-	mainWindow.on('resize', handleStateChange);
-	mainWindow.on('move', handleStateChange);
-	mainWindow.on('show', handleStateChange);
-	mainWindow.on('hide', handleStateChange);
-	mainWindow.on('enter-full-screen', handleStateChange);
-	mainWindow.on('leave-full-screen', handleStateChange);
-	mainWindow.on('close', async (event) => {
-		if (!mainWindow) {
+	currentWindow.on('resize', handleStateChange);
+	currentWindow.on('move', handleStateChange);
+	currentWindow.on('show', handleStateChange);
+	currentWindow.on('hide', handleStateChange);
+	currentWindow.on('enter-full-screen', handleStateChange);
+	currentWindow.on('leave-full-screen', handleStateChange);
+	currentWindow.on('close', async (event) => {
+		if (!currentWindow) {
 			return;
 		}
 
 		event.preventDefault();
 		await exitFullscreen();
 		close();
-		windowStateHandler.fetchAndSave();
+		fetchAndSave();
 	});
 };
 
-const handleAppActivate = () => {
-	getCurrentWindow().show();
-};
-
 export const setupMainWindowStateHandling = () => {
-	app.addListener('activate', handleAppActivate);
-
-	window.addEventListener('beforeunload', () => {
-		app.removeListener('activate', handleAppActivate);
-	}, false);
-
-	attachWindowStateHandling(remote.getCurrentWindow());
-
-	if (process.env.NODE_ENV === 'development') {
-		getCurrentWebContents().openDevTools();
-	}
+	attachWindowStateHandling();
 };
 
-const setProps = (partialProps) => {
-	const prevProps = props;
-	props = {
-		...props,
+export const setMainWindowProps = (partialProps) => {
+	const prevProps = mainWindowProps;
+	mainWindowProps = {
+		...mainWindowProps,
 		...partialProps,
 	};
 
 	const {
 		badge,
 		showWindowOnUnreadChanged,
-	} = props;
+	} = mainWindowProps;
 
 	if (prevProps.badge !== badge && typeof badge === 'number' && showWindowOnUnreadChanged) {
-		const mainWindow = getCurrentWindow();
+		const mainWindow = currentWindow;
 		if (!mainWindow.isFocused()) {
 			mainWindow.once('focus', () => mainWindow.flashFrame(false));
 			mainWindow.showInactive();
@@ -239,8 +190,3 @@ const setProps = (partialProps) => {
 		}
 	}
 };
-
-export default Object.assign(getCurrentWindow(), {
-	setProps,
-	activate,
-});

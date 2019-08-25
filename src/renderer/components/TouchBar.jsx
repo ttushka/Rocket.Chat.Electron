@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { remote } from 'electron';
 import { t } from 'i18next';
+import { useServers, useActiveServer } from './services/ServersProvider';
 
 
 const { TouchBar: ElectronTouchBar, nativeImage, getCurrentWindow } = remote;
@@ -218,8 +219,16 @@ const setProps = (partialProps) => {
 };
 
 export function TouchBar(props) {
+	const servers = useServers();
+	const activeServer = useActiveServer();
+	const activeServerURL = useMemo(() => (activeServer || {}).url, [servers]);
+
 	useEffect(() => {
-		setProps(props);
+		setProps({
+			servers,
+			activeServerURL,
+			...props,
+		});
 	});
 
 	return null;

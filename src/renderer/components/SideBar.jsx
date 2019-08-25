@@ -1,7 +1,9 @@
 import { remote } from 'electron';
 import { t } from 'i18next';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { parse as parseURL } from 'url';
+import { usePreferences } from './services/PreferencesProvider';
+import { useServers, useActiveServer } from './services/ServersProvider';
 
 
 const { getCurrentWindow, Menu } = remote;
@@ -259,8 +261,22 @@ const Markup = React.memo(() =>
 Markup.displayName = 'Markup';
 
 export function SideBar(props) {
+	const { isSideBarVisible } = usePreferences();
+	const servers = useServers();
+	const activeServer = useActiveServer();
+	const activeServerURL = useMemo(() => (activeServer || {}).url, [servers]);
+	const styles = useMemo(() => servers.reduce((styles, { url, style }) => ({ ...styles, [url]: style }), {}), [servers]);
+	const badges = useMemo(() => servers.reduce((styles, { url, badge }) => ({ ...styles, [url]: badge }), {}), [servers]);
+
 	useEffect(() => {
-		setProps(props);
+		setProps({
+			visible: isSideBarVisible,
+			servers,
+			activeServerURL,
+			styles,
+			badges,
+			...props,
+		});
 	});
 
 	return <Markup />;

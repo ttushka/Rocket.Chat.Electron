@@ -5,6 +5,7 @@ import { useAppName } from '../hooks/useAppName';
 import { usePreferences } from './services/PreferencesProvider';
 import { useMainWindowState } from './MainWindow';
 import { getTrayIconImage } from '../icon';
+import { useGlobalBadge } from './services/ServersProvider';
 
 
 const { Menu, systemPreferences, Tray } = remote;
@@ -121,12 +122,14 @@ export function TrayIcon(props) {
 
 	const { hasTrayIcon: visible } = usePreferences();
 	const { isVisible: isMainWindowVisible } = useMainWindowState();
+	const badge = useGlobalBadge();
 
 	useEffect(() => {
 		setProps({
 			appName,
 			visible,
 			isMainWindowVisible,
+			badge,
 			...props,
 		});
 	});

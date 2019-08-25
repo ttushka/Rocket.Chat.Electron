@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { t } from 'i18next';
 import { copyright } from '../../../package.json';
 import { useAppVersion } from '../hooks/useAppVersion';
-import { useAutoUpdaterState } from './services/AutoUpdaterHandler';
+import { useAutoUpdaterState, useAutoUpdaterEvent } from './services/AutoUpdaterHandler';
 
 
 let props = {
@@ -144,6 +144,15 @@ export function AboutModal(props) {
 		canSetCheckForUpdatesOnStart,
 	} = useAutoUpdaterState();
 	const appVersion = useAppVersion();
+	const [updateMessage, setUpdateMessage] = useState(null);
+
+	useAutoUpdaterEvent('update-not-available', () => {
+		setUpdateMessage(t('dialog.about.noUpdatesAvailable'));
+	});
+
+	useAutoUpdaterEvent('error', () => {
+		setUpdateMessage(t('dialog.about.errorWhileLookingForUpdates'));
+	});
 
 	useEffect(() => {
 		setProps({
@@ -152,6 +161,7 @@ export function AboutModal(props) {
 			canSetAutoUpdate: canSetCheckForUpdatesOnStart,
 			currentVersion: appVersion,
 			isCheckingForUpdates,
+			updateMessage,
 			...props,
 		});
 	});

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { parse as parseURL, format as formatURL } from 'url';
 import { reportError } from '../../../errorHandling';
 import { readUserDataFile, readAppDataFile } from '../../userData';
@@ -21,8 +21,8 @@ const loadServers = async () => {
 	if (typeof serversObject === 'string' && serversObject.match(/^https?:\/\//)) {
 		serversObject = {
 			[serversObject]: {
-				title: serversObject,
 				url: serversObject,
+				title: serversObject,
 			},
 		};
 	}
@@ -33,8 +33,8 @@ const loadServers = async () => {
 			return {
 				...hosts,
 				[serverURL]: {
-					title: serverURL,
 					url: serverURL,
+					title: serverURL,
 				},
 			};
 		}, {});
@@ -73,9 +73,9 @@ const loadServers = async () => {
 	return Object.values(serversObject || {})
 		.sort(({ url: a }, { url: b }) => serverURLs.indexOf(a) - serverURLs.indexOf(b))
 		.map(({ url, title, ...serverProps }) => ({
-			...serverProps,
 			url,
 			title: title || url,
+			...serverProps,
 			isActive: url === (activeServerURL === 'null' ? null : activeServerURL),
 		}));
 };
@@ -121,7 +121,23 @@ export const useServers = () => {
 
 export const useActiveServer = () => {
 	const [servers] = useContext(ServersContext);
-	return servers.find(({ isActive }) => isActive);
+	return useMemo(() => servers.find(({ isActive }) => isActive), [servers]);
+};
+
+export const useGlobalBadge = () => {
+	const [servers] = useContext(ServersContext);
+
+	return useMemo(() => {
+		const badges = servers.map(({ badge }) => badge);
+
+		const getMentionCount = () => badges
+			.filter((badge) => Number.isInteger(badge))
+			.reduce((sum, count) => sum + count, 0);
+
+		const hasUnreadBadge = () => badges.some((badge) => !!badge);
+
+		return getMentionCount() || (hasUnreadBadge() && '•') || null;
+	}, [servers]);
 };
 
 export const useServersActions = () => {

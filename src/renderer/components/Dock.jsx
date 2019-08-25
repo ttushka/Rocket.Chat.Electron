@@ -2,6 +2,7 @@ import { remote } from 'electron';
 import { useEffect } from 'react';
 import { usePreferences } from './services/PreferencesProvider';
 import { getTrayIconImage, getAppIconImage } from '../icon';
+import { useGlobalBadge } from './services/ServersProvider';
 
 
 const { app, getCurrentWindow } = remote;
@@ -61,13 +62,14 @@ const setProps = (partialProps) => {
 	}
 };
 
-export function Dock(props) {
+export function Dock() {
 	const { hasTrayIcon } = usePreferences();
+	const badge = useGlobalBadge();
 
 	useEffect(() => {
 		setProps({
 			hasTrayIcon,
-			...props,
+			badge,
 		});
 	});
 

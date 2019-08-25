@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { useServers, useServersActions, useServerValidation } from './services/ServersProvider';
+import React, { useEffect } from 'react';
+import { useServersActions, useServerValidation, useActiveServer } from './services/ServersProvider';
 import { t } from 'i18next';
 
 
@@ -198,15 +198,14 @@ const Markup = React.memo(() =>
 Markup.displayName = 'Markup';
 
 export function LandingView() {
-	const servers = useServers();
-	const visible = useMemo(() => servers.some(({ isActive }) => isActive), [servers]);
+	const activeServer = useActiveServer();
 
 	const { addServer } = useServersActions();
 	const validateServerURL = useServerValidation();
 
 	useEffect(() => {
 		setProps({
-			visible,
+			visible: !activeServer,
 			addServer,
 			validateServerURL,
 		});
