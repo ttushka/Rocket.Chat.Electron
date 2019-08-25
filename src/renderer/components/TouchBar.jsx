@@ -1,16 +1,20 @@
 import { useEffect, useMemo } from 'react';
 import { remote } from 'electron';
 import { t } from 'i18next';
-import { useServers, useActiveServer } from './services/ServersProvider';
+import { useSetOpenView } from './services/OpenViewState';
+import { useServers, useActiveServer, useServersActions } from './services/ServersProvider';
+import { useFormatButtonOnWebView } from './views/WebViewsView';
+import { useMainWindow } from './MainWindow';
 
 
-const { TouchBar: ElectronTouchBar, nativeImage, getCurrentWindow } = remote;
+const { TouchBar: ElectronTouchBar, nativeImage } = remote;
 const { TouchBarButton, TouchBarLabel, TouchBarSegmentedControl, TouchBarScrubber, TouchBarPopover, TouchBarGroup } = ElectronTouchBar;
 
 let props = {
 	servers: [],
 	activeServerURL: null,
 	onTouchServer: null,
+	onTouchFormattingButton: null,
 };
 
 class SelectServerPanel {
@@ -157,8 +161,8 @@ class FormattingPanel {
 				backgroundColor: this._BACKGROUND_COLOR,
 				icon: nativeImage.createFromPath(`${ __dirname }/images/icon-${ buttonClass }.png`),
 				click: () => {
-					const { onTouchFormattingButton } = props;
-					onTouchFormattingButton && onTouchFormattingButton(buttonClass);
+					const { activeServerURL, onTouchFormattingButton } = props;
+					onTouchFormattingButton && onTouchFormattingButton(activeServerURL, buttonClass);
 				},
 			});
 			formatButtons.push(touchBarButton);
@@ -205,31 +209,38 @@ class TouchBarBuilder {
 	}
 }
 
-const setProps = (partialProps) => {
-	props = {
-		...props,
-		...partialProps,
-	};
-
-	const touchBar = new TouchBarBuilder()
-		.addSelectServerPanel(new SelectServerPanel())
-		.addFormattingPanel(new FormattingPanel())
-		.build();
-	getCurrentWindow().setTouchBar(touchBar);
-};
-
-export function TouchBar(props) {
+export function TouchBar() {
 	const servers = useServers();
 	const activeServer = useActiveServer();
 	const activeServerURL = useMemo(() => (activeServer || {}).url, [servers]);
+	const formatButtonOnWebView = useFormatButtonOnWebView();
+	const { setActiveServerURL } = useServersActions();
+	const setOpenView = useSetOpenView();
+	const mainWindow = useMainWindow();
 
 	useEffect(() => {
-		setProps({
+		const onTouchFormattingButton = (serverURL, buttonId) => {
+			formatButtonOnWebView(serverURL, buttonId);
+		};
+
+		const onTouchServer = (serverURL) => {
+			setActiveServerURL(serverURL);
+			setOpenView('webViews');
+		};
+
+		props = {
 			servers,
 			activeServerURL,
-			...props,
-		});
-	});
+			onTouchFormattingButton,
+			onTouchServer,
+		};
+
+		const touchBar = new TouchBarBuilder()
+			.addSelectServerPanel(new SelectServerPanel())
+			.addFormattingPanel(new FormattingPanel())
+			.build();
+		mainWindow.setTouchBar(touchBar);
+	}, [servers, activeServerURL]);
 
 	return null;
 }

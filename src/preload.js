@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron';
 import { setupErrorHandling } from './errorHandling';
 import i18n from './i18n';
 import setupEventsPreload from './preload/events';
+import setupFormatPreload from './preload/format';
 import setupJitsiPreload from './preload/jitsi';
 import setupLinksPreload from './preload/links';
 import setupNotificationsPreload from './preload/notifications';
@@ -13,6 +14,7 @@ import setupUserPresencePreload from './preload/userPresence';
 
 setupErrorHandling('preload');
 setupEventsPreload();
+setupFormatPreload();
 setupJitsiPreload();
 setupLinksPreload();
 setupNotificationsPreload();

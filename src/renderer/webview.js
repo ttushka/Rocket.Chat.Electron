@@ -199,8 +199,14 @@ const openDevTools = (serverURL) => {
 	webviewObj && webviewObj.openDevTools();
 };
 
+const format = (serverURL, buttonId) => {
+	const webviewObj = document.querySelector(`webview[data-server="${ serverURL }"]`);
+	webviewObj && webviewObj.send('format', buttonId);
+};
+
 export default {
 	setProps,
 	reload,
 	openDevTools,
+	format,
 };

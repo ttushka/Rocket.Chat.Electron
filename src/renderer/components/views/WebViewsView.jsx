@@ -27,6 +27,8 @@ export const useReloadWebView = () => webview.reload;
 
 export const useOpenDevToolsForWebView = () => webview.openDevTools;
 
+export const useFormatButtonOnWebView = () => webview.format;
+
 export const WebViewsView = React.lazy(async () => {
 	await setupSpellChecking();
 

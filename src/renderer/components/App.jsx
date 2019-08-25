@@ -195,7 +195,6 @@ function AppInner() {
 	});
 
 	const reloadWebView = useReloadWebView();
-
 	const openDevToolsForWebView = useOpenDevToolsForWebView();
 
 	return <>
@@ -443,22 +442,7 @@ function AppInner() {
 		/>
 		<Dock />
 		<TrayIcon />
-		<TouchBar
-			onTouchFormattingButton={(buttonClass) => {
-				if (focusedWebContents === getCurrentWebContents()) {
-					return;
-				}
-				focusedWebContents.executeJavaScript(`
-					var svg = document.querySelector("button svg[class$='${ buttonClass }']");
-					svg && svg.parentNode.click();
-					`.trim()
-				);
-			}}
-			onTouchServer={(serverURL) => {
-				setActiveServerURL(serverURL);
-				setOpenView('webViews');
-			}}
-		/>
+		<TouchBar />
 	</>;
 }
 
