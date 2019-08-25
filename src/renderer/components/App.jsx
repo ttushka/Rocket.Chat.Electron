@@ -1,5 +1,5 @@
 import { remote, shell } from 'electron';
-import React, { useState } from 'react';
+import React from 'react';
 import { LoadingSplash } from './LoadingSplash';
 import { showMessageBox, showErrorBox } from '../dialogs';
 import { useTranslation } from 'react-i18next';
@@ -28,15 +28,15 @@ import {
 } from './services/CertificatesHandler';
 import { SideBar } from './SideBar';
 import { DragBar } from './DragBar.styles';
-import { LandingView } from './LandingView';
+import { LandingView } from './views/LandingView';
 import {
 	WebViewsView,
 	useOpenDevToolsForWebView,
 	useReloadWebView,
-} from './WebViewsView';
-import { AboutModal } from './AboutModal';
-import { UpdateModal } from './UpdateModal';
-import { ScreenSharingModal } from './ScreenSharingModal';
+} from './views/WebViewsView';
+import { AboutModal } from './modals/AboutModal';
+import { UpdateModal } from './modals/UpdateModal';
+import { ScreenSharingModal } from './modals/ScreenSharingModal';
 import { Dock } from './Dock';
 import {
 	MainWindow,
@@ -55,6 +55,12 @@ import {
 	useFocusedWebContents,
 	useSetFocusedWebContents,
 } from './services/FocusedWebContentsHolder';
+import {
+	OpenModalState,
+	useOpenModal,
+	useSetOpenModal,
+} from './services/OpenModalState';
+import { OpenViewState } from './services/OpenViewState';
 
 
 const { app, getCurrentWebContents } = remote;
@@ -76,9 +82,10 @@ function AppInner() {
 		setCheckForUpdatesOnStart,
 	} = useAutoUpdaterActions();
 
-	const [openModal, setOpenModal] = useState(null);
 	const focusedWebContents = useFocusedWebContents();
 	const setFocusedWebContents = useSetFocusedWebContents();
+	const openModal = useOpenModal();
+	const setOpenModal = useSetOpenModal();
 
 	const mergePreferences = useMergePreferences();
 
@@ -469,7 +476,11 @@ export function App() {
 								<DeepLinkingHandler>
 									<BasicAuthenticationHandler />
 									<FocusedWebContentsHolder>
-										<AppInner />
+										<OpenModalState>
+											<OpenViewState>
+												<AppInner />
+											</OpenViewState>
+										</OpenModalState>
 									</FocusedWebContentsHolder>
 								</DeepLinkingHandler>
 							</CertificatesHandler>

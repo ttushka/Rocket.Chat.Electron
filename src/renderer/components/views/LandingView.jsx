@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useServersActions, useServerValidation, useActiveServer } from './services/ServersProvider';
+import { useServersActions, useServerValidation, useActiveServer } from '../services/ServersProvider';
 import { t } from 'i18next';
 
 

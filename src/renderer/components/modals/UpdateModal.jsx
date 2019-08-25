@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { useAppVersion } from '../hooks/useAppVersion';
-import { useAutoUpdaterState } from './services/AutoUpdaterHandler';
+import { useAppVersion } from '../../hooks/useAppVersion';
+import { useAutoUpdaterState } from '../services/AutoUpdaterHandler';
 import { t } from 'i18next';
 
 

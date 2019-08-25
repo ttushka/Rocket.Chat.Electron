@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
-import webview from '../webview';
-import contextMenu from '../contextMenu';
+import webview from '../../webview';
+import contextMenu from '../../contextMenu';
 import {
 	getEnabledSpellCheckingDictionaries,
 	getSpellCheckingCorrections,
@@ -9,13 +9,13 @@ import {
 	installSpellCheckingDictionaries,
 	setSpellCheckingDictionaryEnabled,
 	setupSpellChecking,
-} from '../spellChecking';
-import { showOpenDialog, showErrorBox } from '../dialogs';
+} from '../../spellChecking';
+import { showOpenDialog, showErrorBox } from '../../dialogs';
 import { useTranslation } from 'react-i18next';
-import { reportError } from '../../errorHandling';
+import { reportError } from '../../../errorHandling';
 import { shell, clipboard } from 'electron';
-import { useServers } from './services/ServersProvider';
-import { usePreferences } from './services/PreferencesProvider';
+import { useServers } from '../services/ServersProvider';
+import { usePreferences } from '../services/PreferencesProvider';
 
 
 const Markup = React.memo(() =>

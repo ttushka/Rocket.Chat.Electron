@@ -1,7 +1,7 @@
 import { desktopCapturer } from 'electron';
 import React, { useEffect } from 'react';
 import { t } from 'i18next';
-import { reportError } from '../../errorHandling';
+import { reportError } from '../../../errorHandling';
 
 
 let props = {
