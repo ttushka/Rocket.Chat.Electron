@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { useActiveServer } from './ServersProvider';
 
 
 const OpenViewContext = createContext([]);
@@ -14,7 +15,8 @@ export const useSetOpenView = () => {
 };
 
 export function OpenViewState({ children }) {
-	const stateAndSetter = useState(null);
+	const activeServer = useActiveServer();
+	const stateAndSetter = useState(activeServer ? 'webViews' : 'landing');
 
 	return <OpenViewContext.Provider value={stateAndSetter}>
 		{children}

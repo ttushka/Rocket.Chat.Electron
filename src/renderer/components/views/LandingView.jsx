@@ -1,135 +1,228 @@
 import { Button } from '@rocket.chat/fuselage';
-import { t } from 'i18next';
-import React, { useEffect, useMemo, useState } from 'react';
-import { useServersActions, useServerValidation } from '../services/ServersProvider';
-import { useOpenView } from '../services/OpenViewState';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+	Outer,
+	Inner,
+	OffLineCard,
+	ConnectToServerForm,
+	ConnectToServerLabel,
+	ConnectToServerInput,
+	ConnectToServerError,
+} from './LandingView.styles';
 import { RocketChatLogo } from '../ui/RocketChatLogo';
+import { useOpenView, useSetOpenView } from '../services/OpenViewState';
+import { useServers, useServersActions } from '../services/ServersProvider';
 
 
 const defaultServerURL = 'https://open.rocket.chat';
 
-export function LandingView() {
-	const { addServer } = useServersActions();
-	const validateServerURL = useServerValidation();
+const normalizeURL = (serverURL) => {
+	if (!/^https?:\/\//.test(serverURL)) {
+		return `https://${ serverURL }`;
+	}
 
-	const [serverURL, setServerURL] = useState('');
-	const [errorMessage, setErrorMessage] = useState('');
-	const [isValidating, setValidating] = useState(false);
+	return serverURL;
+};
 
-	const openView = useOpenView();
-	const visible = useMemo(() => !openView || openView === 'landing', [openView]);
+const validateServer = async (serverURL, timeout = 5000) => {
+	try {
+		const headers = new Headers();
 
-	const tryValidation = (_serverURL = serverURL.trim()) => (resolve, reject) => {
-		setServerURL(_serverURL);
-		setErrorMessage('');
+		if (serverURL.includes('@')) {
+			const url = new URL(serverURL);
+			serverURL = url.origin;
+			headers.set('Authorization', `Basic ${ btoa(`${ url.username }:${ url.password }`) }`);
+		}
+		const response = await Promise.race([
+			fetch(`${ serverURL }/api/info`, { headers }),
+			new Promise((resolve, reject) => setTimeout(() => reject('timeout'), timeout)),
+		]);
 
-		if (!_serverURL) {
-			setValidating(false);
-			resolve();
-			return;
+		if (response.status === 401) {
+			return 'basic-auth';
 		}
 
-		setValidating(true);
+		if (!response.ok) {
+			return 'invalid';
+		}
 
-		validateServerURL(_serverURL)
-			.then(() => {
-				setValidating(false);
-				resolve();
-			})
-			.catch((status) => {
-				if (status === 'basic-auth') {
-					setErrorMessage(t('error.authNeeded', { auth: 'username:password@host' }));
-					setValidating(false);
-					reject();
-					return;
-				}
+		const { success } = await response.json();
+		if (!success) {
+			return 'invalid';
+		}
 
-				if (/^https?:\/\/.+/.test(_serverURL)) {
-					if (status === 'invalid') {
-						setErrorMessage(t('error.noValidServerFound'));
-					} else if (status === 'timeout') {
-						setErrorMessage(t('error.connectTimeout'));
-					} else {
-						setErrorMessage(status.message || String(status));
-					}
+		return 'valid';
+	} catch (error) {
+		return 'invalid';
+	}
+};
 
-					setValidating(false);
-					reject();
-					return;
-				}
-
-				if (!/(^https?:\/\/)|(\.)|(^([^:]+:[^@]+@)?localhost(:\d+)?$)/.test(_serverURL)) {
-					return tryValidation(`https://${ _serverURL }.rocket.chat`)(resolve, reject);
-				}
-
-				if (!/^https?:\/\//.test(_serverURL)) {
-					return tryValidation(`https://${ _serverURL }`)(resolve, reject);
-				}
-			});
-	};
-
-	const validate = () => new Promise(tryValidation(serverURL));
-
-	const handleFormSubmit = async (event) => {
-		event.preventDefault();
-		event.stopPropagation();
-
-		await validate();
-
-		addServer(serverURL || defaultServerURL);
-
-		setServerURL('');
-	};
-
-	const handleInputBlur = () => {
-		validate();
-	};
-
-	const handleInputChange = (event) => {
-		setServerURL(event.currentTarget.value);
-	};
-
-	const [isOffline, setOffline] = useState(false);
+export const useConnectionStatus = () => {
+	const [isOffLine, setOffLine] = useState(false);
 
 	useEffect(() => {
-		const handleConnectionChange = () => {
-			setOffline(!navigator.onLine);
+		const handleConnectionStatus = () => {
+			setOffLine(!navigator.onLine);
 		};
 
-		window.addEventListener('online', handleConnectionChange);
-		window.addEventListener('offline', handleConnectionChange);
-
-		handleConnectionChange();
+		window.addEventListener('online', handleConnectionStatus);
+		window.addEventListener('offline', handleConnectionStatus);
+		handleConnectionStatus();
 
 		return () => {
-			window.removeEventListener('online', handleConnectionChange);
-			window.removeEventListener('offline', handleConnectionChange);
+			window.removeEventListener('online', handleConnectionStatus);
+			window.removeEventListener('offline', handleConnectionStatus);
 		};
 	}, []);
 
-	useEffect(() => {
-		document.body.classList.toggle('offline', isOffline);
-	}, [isOffline]);
+	return isOffLine;
+};
 
-	return <section className={['landing-view', !visible && 'hide'].filter(Boolean).join(' ')}>
-		<div className='wrapper'>
-			<RocketChatLogo dark />
-			<form id='login-card' method='/' onSubmit={handleFormSubmit}>
-				<header>
-					<h2 className='connect__prompt'>{errorMessage ? t('landing.invalidUrl') : t('landing.inputUrl')}</h2>
-				</header>
-				<div className='fields'>
-					<div className='input-text active'>
-						<input type='text' name='host' placeholder={defaultServerURL} dir='auto' onBlur={handleInputBlur} value={serverURL} onChange={handleInputChange} className={errorMessage ? 'wrong' : undefined} />
-					</div>
-				</div>
+export const useForm = () => {
+	const servers = useServers();
+	const { addServer, setActiveServerURL } = useServersActions();
+	const setOpenView = useSetOpenView();
+	const [serverURL, setServerURL] = useState('');
+	const [error, setError] = useState(null);
+	const [validating, setValidating] = useState(false);
+	const { t } = useTranslation();
 
-				<div id='invalidUrl' style={{ display: errorMessage ? 'block' : 'none' }} className='alert alert-danger'>{errorMessage}</div>
+	const handleConnectToServer = async (serverURL) => {
+		const index = servers.findIndex(({ url }) => url === serverURL);
 
-				<div className='connect__error alert alert-danger only-offline'>{t('error.offline')}</div>
+		if (index > -1) {
+			setActiveServerURL(serverURL);
+			setOpenView('webViews');
+			return;
+		}
 
-				<Button type='submit' primary disabled={isValidating} className='login'>{isValidating ? t('landing.validating') : t('landing.connect')}</Button>
-			</form>
-		</div>
-	</section>;
+		const result = await validateServer(serverURL);
+		if (result === 'valid') {
+			addServer(serverURL);
+			setActiveServerURL(serverURL);
+			setOpenView('webViews');
+		}
+
+		return result;
+	};
+
+	const handleSubmit = async (event) => {
+		event.preventDefault();
+
+		setError(null);
+		setValidating(true);
+
+		const value = serverURL.trim() || defaultServerURL;
+
+		const tries = [
+			value,
+			(
+				!/(^https?:\/\/)|(\.)|(^([^:]+:[^@]+@)?localhost(:\d+)?$)/.test(value) ?
+					`https://${ value }.rocket.chat` :
+					null
+			),
+		].filter(Boolean).map(normalizeURL);
+
+		let result;
+		for (const serverURL of tries) {
+			setServerURL(serverURL);
+
+			result = await handleConnectToServer(serverURL);
+
+			if (result === 'valid') {
+				setServerURL('');
+				setError(null);
+				setValidating(false);
+				return;
+			}
+		}
+
+		switch (result) {
+			case 'basic-auth':
+				setError(t('error.authNeeded', { auth: 'username:password@host' }));
+				setValidating(false);
+				break;
+
+			case 'invalid':
+				setError(t('error.noValidServerFound'));
+				setValidating(false);
+				break;
+
+			case 'timeout':
+				setError(t('error.connectTimeout'));
+				setValidating(false);
+				break;
+		}
+	};
+
+	const handleServerURLChange = ({ currentTarget: { value } }) => {
+		setServerURL(value);
+		setError(null);
+	};
+
+	return {
+		serverURL,
+		error,
+		validating,
+		handleSubmit,
+		handleServerURLChange,
+	};
+};
+
+export function LandingView() {
+	const openView = useOpenView();
+	const isVisible = openView === 'landing';
+
+	const isOffLine = useConnectionStatus();
+
+	const {
+		serverURL,
+		error,
+		validating,
+		handleSubmit,
+		handleServerURLChange,
+	} = useForm();
+
+	const { t } = useTranslation();
+
+	return (
+		<Outer isVisible={isVisible}>
+			<Inner>
+				<RocketChatLogo dark />
+				{isOffLine ?
+					(
+						<OffLineCard>
+							{t('error.offline')}
+						</OffLineCard>
+					) :
+					(
+						<ConnectToServerForm method='/' onSubmit={handleSubmit}>
+							<ConnectToServerLabel>
+								{t('landing.inputUrl')}
+							</ConnectToServerLabel>
+
+							<ConnectToServerInput
+								type='text'
+								placeholder={defaultServerURL}
+								dir='auto'
+								value={serverURL}
+								error={error}
+								onChange={handleServerURLChange}
+							/>
+
+							<Button type='submit' primary disabled={validating}>
+								{validating ? t('landing.validating') : t('landing.connect')}
+							</Button>
+
+							{error && (
+								<ConnectToServerError>
+									{error}
+								</ConnectToServerError>
+							)}
+						</ConnectToServerForm>
+					)}
+			</Inner>
+		</Outer>
+	);
 }
