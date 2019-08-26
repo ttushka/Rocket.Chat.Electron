@@ -22,7 +22,8 @@
             "checkUpdates": "Check for Updates",
             "checkUpdatesOnStart": "Check for Updates on Start",
             "noUpdatesAvailable": "No updates are available.",
-            "copyright": "Copyright {{copyright}}"
+            "copyright": "Copyright {{copyright}}",
+            "ok": "OK"
         },
         "addServer": {
             "title": "Add Server",

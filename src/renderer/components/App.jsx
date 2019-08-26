@@ -179,8 +179,8 @@ export function App() {
 												<DragBar />
 												<SideBar />
 												<>
-													<WebViewsView />
 													<LandingView />
+													<WebViewsView />
 												</>
 												<>
 													<AboutModal />
