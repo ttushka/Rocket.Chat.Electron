@@ -117,9 +117,11 @@ export const setupUpdates = async (): Promise<void> => {
     },
   });
 
-  if (!isUpdatingAllowed || !isUpdatingEnabled) {
-    return;
-  }
+  //this is commented out to disable all updates for on-premise deployment
+  //if (!isUpdatingAllowed || !isUpdatingEnabled) {
+  //  return;
+  //}
+  return;
 
   autoUpdater.addListener('checking-for-update', () => {
     dispatch({ type: UPDATES_CHECKING_FOR_UPDATE });

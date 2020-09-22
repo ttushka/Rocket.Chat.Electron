@@ -7,7 +7,7 @@ import {
   purgeLocalStorage,
   watchAndPersistChanges,
 } from './app/main/data';
-import { setUserDataDirectory, setupElectronReloader, installDevTools } from './app/main/dev';
+import { setUserDataDirectory } from './app/main/dev';
 import { setupDeepLinks, processDeepLinksInArgs } from './deepLinks/main';
 import { setupMainErrorHandling } from './errors';
 import { setupI18n } from './i18n/main';
@@ -40,11 +40,6 @@ const start = async (): Promise<void> => {
   setupI18n();
 
   await app.whenReady();
-
-  if (process.env.NODE_ENV === 'development') {
-    setupElectronReloader();
-    installDevTools();
-  }
 
   const rootWindow = createRootWindow();
 

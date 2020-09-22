@@ -1,8 +1,8 @@
 {
-  "name": "rocketchat",
-  "description": "Official OSX, Windows, and Linux Desktop Clients for Rocket.Chat",
-  "version": "3.0.0-develop",
-  "author": "Rocket.Chat Support <support@rocket.chat>",
+  "name": "aldb-rocketchat",
+  "description": "Fork from official OSX, Windows, and Linux Desktop Clients for Rocket.Chat",
+  "version": "3.0.0-aldb",
+  "author": "Matthäus Oelschläger <matthaeus.oelschlaeger@aldb.org>",
   "copyright": "© 2016-2020, Rocket.Chat",
   "homepage": "https://rocket.chat",
   "license": "MIT",
@@ -29,7 +29,9 @@
     "test": "xvfb-maybe jest",
     "update-icons": "node ./build/update-icons.js",
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
-    "eslint": "eslint src"
+    "eslint": "eslint src",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "@bugsnag/js": "^7.3.3",
@@ -78,7 +80,6 @@
     "@rollup/plugin-node-resolve": "^9.0.0",
     "@rollup/plugin-replace": "^2.3.3",
     "@rollup/plugin-typescript": "^5.0.2",
-    "@types/electron-devtools-installer": "^2.2.0",
     "@types/i18next-node-fs-backend": "^2.1.0",
     "@types/jest": "^26.0.10",
     "@types/meteor": "^1.4.49",
@@ -96,8 +97,7 @@
     "conventional-changelog-cli": "^2.1.0",
     "convert-svg-to-png": "^0.5.0",
     "electron": "^10.0.1",
-    "electron-builder": "^22.8.0",
-    "electron-devtools-installer": "^3.1.1",
+    "electron-builder": "^22.8.1",
     "electron-notarize": "^1.0.0",
     "electron-reloader": "^1.0.1",
     "eslint": "^7.7.0",
@@ -119,5 +119,18 @@
     "node": ">=12.8.x",
     "yarn": ">=1.22.x"
   },
-  "productName": "Rocket.Chat"
+  "productName": "ALDB Chat",
+  "build": {
+    "appId": "com.electron.aldbchat",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
 }
